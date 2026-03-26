@@ -34,7 +34,7 @@ from weather.nws_forecast import get_effective_forecast
 from predictor.probability import parse_brackets, assign_probabilities
 from trader.edge import compute_signals
 from trader.sizer import kelly_contracts
-from trader.daily_lock import should_bet, is_locked, get_lock, lock as write_lock
+from trader.daily_lock import should_bet, is_locked, get_lock, lock as write_lock, lock_prediction
 from display.dashboard import render_live, render_backtest, console
 
 ET = ZoneInfo("America/New_York")
@@ -90,10 +90,17 @@ def run_once(bankroll: float) -> float:
         console.print("[yellow]No open markets for today.[/]")
         return bankroll
 
-    # 3. Always use SIGMA_MORNING for the fixed daily prediction
-    #    (consistent with bet window; doesn't drift throughout day)
-    forecast, _ = get_effective_forecast()
-    sigma = config.SIGMA_MORNING
+    # 3. Use locked forecast if available — probabilities frozen at market open.
+    #    Only fetch fresh NWS on the first call of the day (locks immediately).
+    existing_lock = get_lock()
+    if existing_lock:
+        forecast = existing_lock["forecast"]
+        sigma    = existing_lock["sigma"]
+    else:
+        forecast, _ = get_effective_forecast()
+        sigma = config.SIGMA_MORNING
+        lock_prediction(forecast, sigma)
+        console.print(f"[green]Prediction locked at market open: {forecast}°F σ={sigma}°F[/]")
 
     # 4. Probability model
     brackets = parse_brackets(markets)

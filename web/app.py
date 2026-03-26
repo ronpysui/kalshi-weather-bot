@@ -42,17 +42,23 @@ def _fetch_live():
     if not markets:
         return {"error": "No open markets found for today.", "brackets": [], "signals": []}
 
-    forecast, _ = get_effective_forecast()
-    # Always use SIGMA_MORNING — prediction is fixed at bet time, not dynamic
-    sigma = config.SIGMA_MORNING
+    # ── Use locked forecast if we already have one for today ─────────────────
+    # This ensures bracket probabilities are frozen at market-open values and
+    # don't drift throughout the day as NWS updates its forecast.
+    existing_lock = get_lock()
+    if existing_lock:
+        forecast = existing_lock["forecast"]
+        sigma    = existing_lock["sigma"]
+    else:
+        # First call of the day — fetch NWS forecast and lock it immediately.
+        # Subsequent calls will use this locked value regardless of NWS updates.
+        forecast, _ = get_effective_forecast()
+        sigma = config.SIGMA_MORNING
+        lock_prediction(forecast, sigma)
 
     brackets = parse_brackets(markets)
     brackets = assign_probabilities(brackets, mu=forecast, sigma=sigma)
     signals  = compute_signals(brackets)
-
-    # Lock prediction on first daily fetch — fixes forecast+sigma for the whole day.
-    # Orders fire separately at BET_HOUR_ET via main.py.
-    lock_prediction(forecast, sigma)
 
     now_et   = datetime.now(ET)
     lock     = get_lock()
