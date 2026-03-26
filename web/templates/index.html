@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KXHIGHNY // Kalshi Bot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #090b0e;
+      --bg1:        #0d1117;
+      --bg2:        #111820;
+      --bg3:        #161e2a;
+      --border:     #1e2d3d;
+      --border2:    #243040;
+      --green:      #00ff88;
+      --green-dim:  #00cc6a;
+      --red:        #ff4466;
+      --red-dim:    #cc3355;
+      --yellow:     #ffd700;
+      --cyan:       #00d4ff;
+      --cyan-dim:   #0099cc;
+      --purple:     #9d4edd;
+      --text:       #c9d1d9;
+      --text-dim:   #6e7681;
+      --text-bright:#e6edf3;
+      --mono:       'JetBrains Mono', monospace;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.5;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Scrollbar ─────────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg1); }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+    /* ── Header ────────────────────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      height: 52px;
+      background: var(--bg1);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--green);
+      text-shadow: 0 0 20px rgba(0,255,136,0.4);
+    }
+
+    .logo span { color: var(--text-dim); font-weight: 400; }
+
+    .tag {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      padding: 2px 8px;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+
+    .tag-dry  { background: rgba(255,215,0,0.12); color: var(--yellow); border: 1px solid rgba(255,215,0,0.25); }
+    .tag-live { background: rgba(0,255,136,0.12); color: var(--green);  border: 1px solid rgba(0,255,136,0.25); }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .clock {
+      color: var(--text-dim);
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .clock span { color: var(--cyan); }
+
+    .refresh-countdown {
+      font-size: 11px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .countdown-bar-wrap {
+      width: 40px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .countdown-bar {
+      height: 100%;
+      background: var(--cyan);
+      border-radius: 2px;
+      transition: width 1s linear;
+    }
+
+    nav {
+      display: flex;
+      gap: 2px;
+    }
+
+    nav button {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 14px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.15s;
+      letter-spacing: 0.05em;
+    }
+
+    nav button:hover { color: var(--text-bright); background: var(--bg2); }
+    nav button.active { color: var(--green); background: rgba(0,255,136,0.08); }
+
+    /* ── Layout ────────────────────────────────────────────────────────────── */
+    main {
+      padding: 20px 24px;
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ── Section header ────────────────────────────────────────────────────── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .section-title::before {
+      content: '// ';
+      color: var(--green);
+    }
+
+    /* ── Cards ─────────────────────────────────────────────────────────────── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: var(--bg1);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 16px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--accent, var(--cyan));
+      opacity: 0.6;
+    }
+
+    .card:hover { border-color: var(--border2); }
+
+    .card-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+
+    .card-value {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .card-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .green  { color: var(--green); }
+    .red    { color: var(--red); }
+    .yellow { color: var(--yellow); }
+    .cyan   { color: var(--cyan); }
+    .purple { color: var(--purple); }
+    .dim    { color: var(--text-dim); }
+
+    /* ── Panel ─────────────────────────────────────────────────────────────── */
+    .panel {
+      background: var(--bg1);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+    }
+
+    .panel-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .panel-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* ── Table ─────────────────────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    thead tr {
+      background: var(--bg2);
+    }
+
+    thead th {
+      padding: 8px 14px;
+      text-align: right;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    thead th:first-child { text-align: left; }
+
+    tbody tr {
+      border-bottom: 1px solid rgba(30,45,61,0.5);
+      transition: background 0.1s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+    tbody td {
+      padding: 9px 14px;
+      text-align: right;
+      white-space: nowrap;
+      color: var(--text);
+    }
+
+    tbody td:first-child {
+      text-align: left;
+      color: var(--text-bright);
+      font-weight: 500;
+    }
+
+    /* ── Probability bar ───────────────────────────────────────────────────── */
+    .prob-cell {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .prob-bar-wrap {
+      width: 80px;
+      height: 4px;
+      background: var(--bg3);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .prob-bar {
+      height: 100%;
+      border-radius: 2px;
+      background: var(--cyan);
+      transition: width 0.6s ease;
+    }
+
+    /* ── Edge pill ─────────────────────────────────────────────────────────── */
+    .edge-pill {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .edge-high   { background: rgba(0,255,136,0.12); color: var(--green); }
+    .edge-med    { background: rgba(0,255,136,0.07); color: var(--green-dim); }
+    .edge-low    { background: rgba(255,215,0,0.08); color: var(--yellow); }
+    .edge-neg    { background: rgba(255,68,102,0.08); color: var(--red); }
+
+    /* ── Signal row ────────────────────────────────────────────────────────── */
+    .side-yes { color: var(--green); font-weight: 700; }
+    .side-no  { color: var(--red);   font-weight: 700; }
+
+    /* ── Forecast bar ──────────────────────────────────────────────────────── */
+    .forecast-bar {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      padding: 14px 20px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    .forecast-item { display: flex; align-items: baseline; gap: 6px; }
+    .forecast-label { color: var(--text-dim); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .forecast-value { font-size: 20px; font-weight: 700; }
+
+    /* ── Chart container ───────────────────────────────────────────────────── */
+    .chart-wrap {
+      padding: 16px;
+      height: 260px;
+      position: relative;
+    }
+
+    /* ── Refresh button ────────────────────────────────────────────────────── */
+    .btn {
+      background: none;
+      border: 1px solid var(--border2);
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.05em;
+    }
+
+    .btn:hover { border-color: var(--cyan); color: var(--cyan); }
+    .btn.loading { opacity: 0.5; pointer-events: none; }
+
+    /* ── Status dot ────────────────────────────────────────────────────────── */
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+    }
+
+    .dot-green { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+    .dot-yellow { background: var(--yellow); }
+    .dot-red  { background: var(--red); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── No signals ────────────────────────────────────────────────────────── */
+    .no-signals {
+      padding: 28px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+
+    .no-signals span { color: var(--yellow); }
+
+    /* ── Spinner ───────────────────────────────────────────────────────────── */
+    .spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid var(--border2);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Loading overlay ───────────────────────────────────────────────────── */
+    .loading-overlay {
+      padding: 40px;
+      text-align: center;
+      color: var(--text-dim);
+    }
+
+    /* ── Two column layout ─────────────────────────────────────────────────── */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    /* ── Trade log ─────────────────────────────────────────────────────────── */
+    .empty-state {
+      padding: 40px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+
+    /* ── Scanline overlay ──────────────────────────────────────────────────── */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.015) 2px,
+        rgba(0,0,0,0.015) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── Blink cursor ──────────────────────────────────────────────────────── */
+    .cursor::after {
+      content: '▋';
+      animation: blink 1s step-end infinite;
+      color: var(--green);
+      font-size: 0.8em;
+    }
+
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* ── Value flash on update ─────────────────────────────────────────────── */
+    @keyframes flash {
+      0%   { color: var(--cyan); }
+      100% { color: inherit; }
+    }
+
+    .flash { animation: flash 0.6s ease-out; }
+
+    /* ── Positive / negative row highlight ─────────────────────────────────── */
+    tbody tr.row-win  { border-left: 2px solid var(--green); }
+    tbody tr.row-loss { border-left: 2px solid var(--red); }
+
+    /* ── Gradient prob bar ─────────────────────────────────────────────────── */
+    .prob-bar {
+      background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+    }
+
+    /* ── Tooltip ───────────────────────────────────────────────────────────── */
+    .tooltip {
+      font-size: 10px;
+      color: var(--text-dim);
+      font-style: italic;
+      padding: 8px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Today's bets box ──────────────────────────────────────────────────── */
+    .bets-box {
+      background: var(--bg1);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    .bets-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      background: rgba(0,255,136,0.04);
+      border-bottom: 1px solid rgba(0,255,136,0.12);
+    }
+
+    .bets-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--green);
+    }
+
+    .bankroll-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .bankroll-input {
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 8px;
+      width: 90px;
+      text-align: right;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .bankroll-input:focus { border-color: var(--green); }
+
+    .bets-body {
+      padding: 14px 18px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: stretch;
+    }
+
+    .bet-card {
+      flex: 1;
+      min-width: 200px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 12px 14px;
+      position: relative;
+      transition: border-color 0.2s;
+    }
+
+    .bet-card:hover { border-color: var(--border2); }
+
+    .bet-rank {
+      position: absolute;
+      top: 10px; right: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+    }
+
+    .bet-side {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .bet-side.yes { color: var(--green); }
+    .bet-side.no  { color: var(--red); }
+
+    .bet-bracket {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-bright);
+      margin-bottom: 10px;
+      line-height: 1.2;
+    }
+
+    .bet-amount {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 2px;
+    }
+
+    .bet-amount.yes { color: var(--green); }
+    .bet-amount.no  { color: var(--red); }
+
+    .bet-detail {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+
+    .bet-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .bet-tag {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
+    .bet-tag-edge  { background: rgba(0,255,136,0.1); color: var(--green); }
+    .bet-tag-ev    { background: rgba(0,212,255,0.1); color: var(--cyan); }
+    .bet-tag-prob  { background: rgba(157,78,221,0.1); color: var(--purple); }
+
+    .no-bets-box {
+      padding: 20px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+
+    .no-bets-icon {
+      font-size: 20px;
+      opacity: 0.5;
+    }
+
+    /* ── Lock-in button ────────────────────────────────────────────────────── */
+    .lock-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+
+    .lock-btn.yes {
+      background: rgba(0,255,136,0.15);
+      color: var(--green);
+      border: 1px solid rgba(0,255,136,0.3);
+    }
+
+    .lock-btn.yes:hover { background: rgba(0,255,136,0.25); }
+
+    .lock-btn.no {
+      background: rgba(255,68,102,0.12);
+      color: var(--red);
+      border: 1px solid rgba(255,68,102,0.3);
+    }
+
+    .lock-btn.no:hover { background: rgba(255,68,102,0.22); }
+
+    .lock-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .lock-btn.placed {
+      background: rgba(0,255,136,0.08);
+      color: var(--text-dim);
+      border-color: var(--border);
+      cursor: default;
+    }
+
+    .dry-badge {
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 2px;
+      background: rgba(255,215,0,0.15);
+      color: var(--yellow);
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      margin-left: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="header-left">
+    <div class="logo">KXHIGHNY <span>// nyc temp bot</span></div>
+    <div id="mode-tag" class="tag tag-dry">DRY RUN</div>
+  </div>
+  <nav>
+    <button class="active" onclick="showPage('live', this)">LIVE</button>
+    <button onclick="showPage('backtest', this)">BACKTEST</button>
+    <button onclick="showPage('log', this)">TRADE LOG</button>
+  </nav>
+  <div class="header-right">
+    <div class="refresh-countdown" id="countdown-wrap" style="display:none">
+      <span id="countdown-label">refresh in --s</span>
+      <div class="countdown-bar-wrap">
+        <div class="countdown-bar" id="countdown-bar" style="width:100%"></div>
+      </div>
+    </div>
+    <div class="clock">ET &nbsp;<span id="clock">--:--:--</span></div>
+  </div>
+</header>
+
+<!-- ── Main ────────────────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- ── LIVE PAGE ─────────────────────────────────────────────────────────── -->
+  <div id="page-live" class="page active">
+
+    <div class="section-header">
+      <div class="section-title">live market</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="live-ts" class="dim" style="font-size:11px;"></span>
+        <button class="btn" id="btn-refresh-live" onclick="refreshLive()">↺ refresh</button>
+      </div>
+    </div>
+
+    <!-- ── TODAY'S BETS ──────────────────────────────────────────────────── -->
+    <div class="bets-box">
+      <div class="bets-header">
+        <div class="bets-title">// today's bets</div>
+        <div class="bankroll-control">
+          <span>bankroll</span>
+          <span style="color:var(--text-bright)">$</span>
+          <input
+            class="bankroll-input"
+            id="bankroll-input"
+            type="number"
+            min="1"
+            step="10"
+            value="100"
+            oninput="onBankrollChange(this.value)"
+          />
+        </div>
+      </div>
+      <div id="bets-body" class="bets-body">
+        <div class="no-bets-box">
+          <span class="spinner"></span> loading recommendations...
+        </div>
+      </div>
+    </div>
+
+    <!-- ── STAT CARDS ────────────────────────────────────────────────────── -->
+    <div id="live-cards" class="cards" style="margin-bottom:16px;">
+      <div class="card" style="--accent:var(--cyan)">
+        <div class="card-label">NWS Forecast</div>
+        <div class="card-value cyan" id="card-forecast">--.-F</div>
+        <div class="card-sub" id="card-sigma">sigma: --</div>
+      </div>
+      <div class="card" style="--accent:var(--green)">
+        <div class="card-label">Bankroll</div>
+        <div class="card-value green" id="card-bankroll">$--</div>
+        <div class="card-sub" id="card-minedge">min edge: --c</div>
+      </div>
+      <div class="card" style="--accent:var(--purple)">
+        <div class="card-label">Signals</div>
+        <div class="card-value purple" id="card-signals">--</div>
+        <div class="card-sub">actionable trades</div>
+      </div>
+      <div class="card" style="--accent:var(--yellow)">
+        <div class="card-label">Status</div>
+        <div class="card-value" style="font-size:14px;margin-top:4px;" id="card-status">
+          <span class="status-dot dot-yellow"></span>loading
+        </div>
+        <div class="card-sub" id="card-markets">-- markets</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Bracket table -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">bracket probabilities</div>
+          <div class="panel-meta">our model vs kalshi market</div>
+        </div>
+        <div class="table-wrap">
+          <table id="bracket-table">
+            <thead>
+              <tr>
+                <th>Bracket</th>
+                <th>Our Prob</th>
+                <th>Mkt Yes</th>
+                <th>Mkt No</th>
+                <th>Yes Edge</th>
+                <th>No Edge</th>
+              </tr>
+            </thead>
+            <tbody id="bracket-tbody">
+              <tr><td colspan="6" class="loading-overlay"><span class="spinner"></span>loading market data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Signals table -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">signals</div>
+          <div class="panel-meta" id="signals-threshold">edge &gt; 7c</div>
+        </div>
+        <div id="signals-container">
+          <div class="loading-overlay"><span class="spinner"></span>computing signals...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── BACKTEST PAGE ──────────────────────────────────────────────────────── -->
+  <div id="page-backtest" class="page">
+
+    <div class="section-header">
+      <div class="section-title">30-day backtest</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="dim" style="font-size:11px;">vs seasonal climatology baseline</span>
+        <button class="btn" id="btn-refresh-bt" onclick="refreshBacktest()">↺ re-run</button>
+      </div>
+    </div>
+
+    <div id="bt-loading" class="loading-overlay">
+      <span class="spinner"></span>running backtest — fetching 30 days from kalshi...
+    </div>
+
+    <div id="bt-content" style="display:none">
+
+      <!-- Summary cards -->
+      <div class="cards" id="bt-cards"></div>
+
+      <div class="grid-2">
+        <!-- Cumulative P&L chart -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">cumulative P&L</div>
+            <div class="panel-meta">30-day simulation</div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="pnl-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Daily P&L chart -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">daily P&L</div>
+            <div class="panel-meta">per-day breakdown</div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="daily-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Day-by-day table -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">day-by-day results</div>
+          <div class="panel-meta">oldest → newest</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Actual</th>
+                <th>Sim Fcst</th>
+                <th>Seasonal</th>
+                <th>Correct Bracket</th>
+                <th>Mdl P(win)</th>
+                <th>Bets</th>
+                <th>W/L/NB</th>
+                <th>Day P&L</th>
+                <th>Cumul P&L</th>
+              </tr>
+            </thead>
+            <tbody id="bt-tbody"></tbody>
+          </table>
+        </div>
+        <div class="tooltip" style="color:var(--yellow);font-style:normal;">
+          [!] METHODOLOGY — Sim Fcst = actual_high + noise (NOT a real historical NWS forecast).
+          Market price = seasonal climatology (NOT real Kalshi opening prices).
+          Fixed sigma=3F on every day, same as live morning lock.
+          Results show upper bound on model quality — real live returns will be smaller.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── TRADE LOG PAGE ────────────────────────────────────────────────────── -->
+  <div id="page-log" class="page">
+    <div class="section-header">
+      <div class="section-title">trade log</div>
+      <button class="btn" onclick="loadTradeLog()">↺ refresh</button>
+    </div>
+    <div class="panel">
+      <div id="log-container">
+        <div class="loading-overlay"><span class="spinner"></span>loading...</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── Clock ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  document.getElementById('clock').textContent =
+    et.toTimeString().slice(0, 8);
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Nav ────────────────────────────────────────────────────────────────────
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'backtest' && !window._btLoaded) loadBacktest();
+  if (name === 'log') loadTradeLog();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const fmt = {
+  pct:    v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%',
+  dollar: v => (v >= 0 ? '+' : '') + '$' + Math.abs(v).toFixed(2),
+  edge:   v => (v >= 0 ? '+' : '') + v.toFixed(1) + 'c',
+};
+
+function edgeClass(v) {
+  if (v >= 15) return 'edge-high';
+  if (v >= 7)  return 'edge-med';
+  if (v >= 0)  return 'edge-low';
+  return 'edge-neg';
+}
+
+function colorClass(v) {
+  if (v > 0) return 'green';
+  if (v < 0) return 'red';
+  return 'dim';
+}
+
+// ── Bankroll ───────────────────────────────────────────────────────────────
+let _liveData   = null;   // last fetched live payload
+let _bankroll   = 100;
+
+function onBankrollChange(val) {
+  const n = parseFloat(val);
+  if (!n || n <= 0) return;
+  _bankroll = n;
+  document.getElementById('card-bankroll').textContent = '$' + n.toFixed(2);
+  if (_liveData) renderBetsBox(_liveData, n);
+}
+
+// ── Kelly sizing (client-side mirror) ──────────────────────────────────────
+function kellyContracts(ourProb, mktPrice, bankroll) {
+  if (mktPrice <= 0 || mktPrice >= 100) return 0;
+  const p  = ourProb / 100;
+  const pr = mktPrice / 100;
+  const b  = (1 - pr) / pr;
+  const f  = (p * b - (1 - p)) / b * 0.25;   // fractional Kelly
+  if (f <= 0) return 0;
+  return Math.max(1, Math.floor(bankroll * f));
+}
+
+// ── Next-bet countdown (ticks every second) ────────────────────────────────
+let _secsRemaining = null;
+
+function startBetCountdown(secs) {
+  _secsRemaining = secs;
+}
+
+setInterval(() => {
+  if (_secsRemaining === null || _secsRemaining <= 0) return;
+  _secsRemaining--;
+  const el = document.getElementById('next-bet-countdown');
+  if (!el) return;
+  const h = Math.floor(_secsRemaining / 3600);
+  const m = Math.floor((_secsRemaining % 3600) / 60);
+  const s = _secsRemaining % 60;
+  el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}, 1000);
+
+// ── Bets box renderer ──────────────────────────────────────────────────────
+function renderBetsBox(d, bankroll) {
+  const body = document.getElementById('bets-body');
+
+  // LOCKED — show what was placed this morning
+  if (d.locked && d.lock && d.lock.bets && d.lock.bets.length > 0) {
+    const lk = d.lock;
+    body.innerHTML = `
+      <div style="width:100%">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+          <span style="color:var(--green);font-size:11px;font-weight:700;letter-spacing:.1em;">
+            LOCKED ${lk.locked_at.slice(11,16)} ET
+          </span>
+          <span class="dim" style="font-size:11px;">
+            forecast: ${lk.forecast}F &nbsp;|&nbsp; sigma: ${lk.sigma}F &nbsp;|&nbsp; fixed at bet window
+          </span>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          ${lk.bets.map((b, i) => `
+            <div class="bet-card" style="border-color:rgba(0,255,136,0.2);opacity:0.85;">
+              <div class="bet-rank">#${i+1}</div>
+              <div class="bet-side ${b.side}">${b.side.toUpperCase()}</div>
+              <div class="bet-bracket">${b.label}</div>
+              <div class="bet-amount ${b.side}">$${(b.contracts * b.price / 100).toFixed(2)}</div>
+              <div class="bet-detail">${b.contracts} contract${b.contracts!==1?'s':''} @ ${b.price}c</div>
+              <div class="bet-meta">
+                <span class="bet-tag bet-tag-edge">edge +${b.edge}c</span>
+                <span class="bet-tag bet-tag-prob">${b.our_prob}% prob</span>
+              </div>
+              <div style="margin-top:10px;font-size:11px;color:var(--green);">&#10003; placed</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    return;
+  }
+
+  // NOT YET IN BET WINDOW — show countdown
+  if (!d.locked && d.secs_to_bet > 60) {
+    startBetCountdown(d.secs_to_bet);
+    const h = String(Math.floor(d.secs_to_bet/3600)).padStart(2,'0');
+    const m = String(Math.floor((d.secs_to_bet%3600)/60)).padStart(2,'0');
+    const s = String(d.secs_to_bet%60).padStart(2,'0');
+    body.innerHTML = `<div class="no-bets-box" style="flex-direction:column;align-items:flex-start;gap:6px;">
+      <div style="font-size:11px;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;">
+        next prediction locks at ${d.bet_hour_et}:00 AM ET
+      </div>
+      <div style="display:flex;align-items:baseline;gap:8px;">
+        <span style="font-size:28px;font-weight:700;color:var(--cyan);letter-spacing:.04em;"
+              id="next-bet-countdown">${h}:${m}:${s}</span>
+        <span class="dim" style="font-size:11px;">until bet window</span>
+      </div>
+      <div class="dim" style="font-size:11px;margin-top:2px;">
+        Preview below — final signals will be computed fresh at ${d.bet_hour_et}:00 AM using that morning's NWS forecast.
+      </div>
+    </div>`;
+    return;
+  }
+
+  // NO SIGNALS
+  if (!d.signals || d.signals.length === 0) {
+    body.innerHTML = `<div class="no-bets-box">
+      <span class="no-bets-icon">--</span>
+      <div>
+        <div style="color:var(--yellow);font-weight:600;margin-bottom:3px;">no bets today</div>
+        <div>No bracket has enough edge vs the market right now.</div>
+      </div>
+    </div>`;
+    return;
+  }
+
+  body.innerHTML = d.signals.map((s, i) => {
+    const contracts = kellyContracts(s.our_prob, s.mkt_price, bankroll);
+    const riskDollars = (contracts * s.mkt_price / 100).toFixed(2);
+    const winDollars  = (contracts * (100 - s.mkt_price) / 100).toFixed(2);
+    const isBuying    = s.side === 'yes';
+    const dryBadge    = d.dry_run ? '<span class="dry-badge">DRY</span>' : '';
+    const btnId       = `lock-btn-${i}`;
+    return `
+      <div class="bet-card">
+        <div class="bet-rank">#${i+1}</div>
+        <div class="bet-side ${s.side}">${s.side.toUpperCase()}</div>
+        <div class="bet-bracket">${s.label}</div>
+        <div class="bet-amount ${s.side}">$${riskDollars}</div>
+        <div class="bet-detail">${contracts} contract${contracts!==1?'s':''} @ ${s.mkt_price}c &nbsp;|&nbsp; win $${winDollars}</div>
+        <div class="bet-meta">
+          <span class="bet-tag bet-tag-edge">edge +${s.edge}c</span>
+          <span class="bet-tag bet-tag-ev">EV +${s.ev}c</span>
+          <span class="bet-tag bet-tag-prob">${s.our_prob}% prob</span>
+        </div>
+        <button
+          id="${btnId}"
+          class="lock-btn ${s.side}"
+          onclick="lockIn('${s.ticker}','${s.side}',${contracts},${s.mkt_price},'${btnId}')"
+          ${contracts <= 0 ? 'disabled' : ''}
+        >
+          &#9632; lock in bet ${dryBadge}
+        </button>
+      </div>`;
+  }).join('');
+}
+
+// ── Lock-in handler ────────────────────────────────────────────────────────
+async function lockIn(ticker, side, contracts, priceCents, btnId) {
+  const btn = document.getElementById(btnId);
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = '... placing...';
+
+  try {
+    const res = await fetch('/api/place_order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticker, side, contracts, price_cents: priceCents }),
+    });
+    const data = await res.json();
+    if (data.status === 'dry_run' || data.status === 'ok') {
+      btn.className = 'lock-btn placed';
+      btn.innerHTML = data.status === 'dry_run'
+        ? '&#10003; logged (dry run)'
+        : '&#10003; order placed';
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = '&#9632; lock in bet';
+      alert('Order error: ' + (data.error || JSON.stringify(data)));
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = '&#9632; lock in bet';
+    alert('Request failed: ' + e.message);
+  }
+}
+
+// ── Live ───────────────────────────────────────────────────────────────────
+async function loadLive() {
+  try {
+    const res = await fetch('/api/live');
+    const d = await res.json();
+    if (d.error) { renderLiveError(d.error); return; }
+    renderLive(d);
+    ['card-forecast','card-bankroll','card-signals'].forEach(flashEl);
+  } catch(e) {
+    renderLiveError(e.message);
+  }
+}
+
+function renderLive(d) {
+  _liveData = d;   // cache for bankroll recalc
+  _bankroll = parseFloat(document.getElementById('bankroll-input')?.value) || d.bankroll;
+
+  // Bets box
+  renderBetsBox(d, _bankroll);
+
+  // Mode tag
+  const tag = document.getElementById('mode-tag');
+  tag.textContent = d.dry_run ? 'DRY RUN' : 'LIVE';
+  tag.className = 'tag ' + (d.dry_run ? 'tag-dry' : 'tag-live');
+
+  // Cards
+  document.getElementById('card-forecast').textContent = d.forecast + 'F';
+  document.getElementById('card-sigma').textContent = 'sigma: ' + d.sigma + 'F';
+  document.getElementById('card-bankroll').textContent = '$' + d.bankroll.toFixed(2);
+  document.getElementById('card-minedge').textContent = 'min edge: ' + (d.min_edge * 100).toFixed(0) + 'c';
+  document.getElementById('card-signals').textContent = d.signals.length;
+  document.getElementById('card-markets').textContent = d.brackets.length + ' brackets';
+  document.getElementById('signals-threshold').textContent = 'edge > ' + (d.min_edge * 100).toFixed(0) + 'c';
+
+  const statusEl = document.getElementById('card-status');
+  if (d.signals.length > 0) {
+    statusEl.innerHTML = '<span class="status-dot dot-green"></span>signals found';
+  } else {
+    statusEl.innerHTML = '<span class="status-dot dot-yellow"></span>monitoring';
+  }
+
+  document.getElementById('live-ts').textContent = d.timestamp;
+
+  // Bracket table
+  // Find the bracket with highest our_prob
+  const maxProb = Math.max(...d.brackets.map(b => b.our_prob));
+
+  const tbody = document.getElementById('bracket-tbody');
+  tbody.innerHTML = d.brackets.map(b => {
+    const isTop = b.our_prob === maxProb;
+    const rowStyle = isTop ? 'background:rgba(0,212,255,0.04);' : '';
+    return `
+    <tr style="${rowStyle}">
+      <td style="${isTop ? 'color:var(--cyan);font-weight:600' : ''}">${b.label}${isTop ? ' &lt;--' : ''}</td>
+      <td>
+        <div class="prob-cell">
+          <span class="${isTop ? 'cyan' : 'dim'}" style="font-weight:${isTop?'600':'400'}">${b.our_prob}%</span>
+          <div class="prob-bar-wrap">
+            <div class="prob-bar" style="width:${Math.min(b.our_prob,100)}%;${isTop?'background:var(--cyan)':''}"></div>
+          </div>
+        </div>
+      </td>
+      <td class="dim">${b.mkt_yes}c</td>
+      <td class="dim">${b.mkt_no}c</td>
+      <td><span class="edge-pill ${edgeClass(b.yes_edge)}">${fmt.edge(b.yes_edge)}</span></td>
+      <td><span class="edge-pill ${edgeClass(b.no_edge)}">${fmt.edge(b.no_edge)}</span></td>
+    </tr>`
+  }).join('');
+
+  // Signals
+  const sigContainer = document.getElementById('signals-container');
+  if (d.signals.length === 0) {
+    sigContainer.innerHTML = `<div class="no-signals">
+      no actionable signals<br>
+      <span>edge threshold not met on any bracket</span>
+    </div>`;
+  } else {
+    sigContainer.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Bracket</th><th>Side</th><th>Our Prob</th>
+              <th>Mkt Price</th><th>Edge</th><th>EV/$</th>
+              <th>Contracts</th><th>Risk</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${d.signals.map(s => `
+              <tr>
+                <td>${s.label}</td>
+                <td class="side-${s.side}">${s.side.toUpperCase()}</td>
+                <td class="cyan">${s.our_prob}%</td>
+                <td class="dim">${s.mkt_price}c</td>
+                <td><span class="edge-pill ${edgeClass(s.edge)}">${fmt.edge(s.edge)}</span></td>
+                <td class="green">+${s.ev}c</td>
+                <td class="${colorClass(s.contracts)}">${s.contracts}</td>
+                <td class="dim">$${s.risk.toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+}
+
+function renderLiveError(msg) {
+  document.getElementById('bracket-tbody').innerHTML =
+    `<tr><td colspan="6" style="padding:24px;color:var(--red);text-align:center">${msg}</td></tr>`;
+}
+
+async function refreshLive() {
+  const btn = document.getElementById('btn-refresh-live');
+  btn.classList.add('loading');
+  btn.textContent = '↺ refreshing...';
+  await fetch('/api/refresh/live');
+  await new Promise(r => setTimeout(r, 1500));
+  await loadLive();
+  btn.classList.remove('loading');
+  btn.textContent = '↺ refresh';
+}
+
+// ── Backtest ───────────────────────────────────────────────────────────────
+let _pnlChart = null, _dailyChart = null;
+
+async function loadBacktest() {
+  document.getElementById('bt-loading').style.display = 'block';
+  document.getElementById('bt-content').style.display = 'none';
+  try {
+    const res = await fetch('/api/backtest');
+    const d = await res.json();
+    if (d.error) { alert('Backtest error: ' + d.error); return; }
+    renderBacktest(d);
+    window._btLoaded = true;
+  } catch(e) {
+    alert('Error: ' + e.message);
+  } finally {
+    document.getElementById('bt-loading').style.display = 'none';
+    document.getElementById('bt-content').style.display = 'block';
+  }
+}
+
+function renderBacktest(d) {
+  const s = d.summary;
+
+  // Cards
+  const pnlColor = s.total_pnl >= 0 ? 'green' : 'red';
+  const roiColor = s.roi >= 0 ? 'green' : 'red';
+  const shrpColor = s.sharpe >= 1 ? 'green' : s.sharpe >= 0 ? 'yellow' : 'red';
+  const accColor = s.accuracy >= 50 ? 'green' : 'yellow';
+
+  document.getElementById('bt-cards').innerHTML = `
+    <div class="card" style="--accent:var(--${pnlColor})">
+      <div class="card-label">Total P&L</div>
+      <div class="card-value ${pnlColor}">${fmt.dollar(s.total_pnl)}</div>
+      <div class="card-sub">avg ${fmt.dollar(s.avg_daily)}/day</div>
+    </div>
+    <div class="card" style="--accent:var(--cyan)">
+      <div class="card-label">Win Rate</div>
+      <div class="card-value cyan">${s.win_rate}%</div>
+      <div class="card-sub dim">${s.wins}W / ${s.losses}L / ${s.ties}T</div>
+    </div>
+    <div class="card" style="--accent:var(--${roiColor})">
+      <div class="card-label">ROI</div>
+      <div class="card-value ${roiColor}">${fmt.pct(s.roi)}</div>
+      <div class="card-sub dim">$${s.total_risked} risked</div>
+    </div>
+    <div class="card" style="--accent:var(--${shrpColor})">
+      <div class="card-label">Sharpe</div>
+      <div class="card-value ${shrpColor}">${s.sharpe}</div>
+      <div class="card-sub dim">annualised</div>
+    </div>
+    <div class="card" style="--accent:var(--${accColor})">
+      <div class="card-label">Model Accuracy</div>
+      <div class="card-value ${accColor}">${s.accuracy}%</div>
+      <div class="card-sub dim">Brier: ${s.brier}</div>
+    </div>
+    <div class="card" style="--accent:var(--yellow)">
+      <div class="card-label">Best Day</div>
+      <div class="card-value green">${fmt.dollar(s.best_pnl)}</div>
+      <div class="card-sub dim">${s.best_day}</div>
+    </div>
+    <div class="card" style="--accent:var(--red)">
+      <div class="card-label">Worst Day</div>
+      <div class="card-value red">${fmt.dollar(s.worst_pnl)}</div>
+      <div class="card-sub dim">${s.worst_day}</div>
+    </div>
+    <div class="card" style="--accent:var(--purple)">
+      <div class="card-label">Active Days</div>
+      <div class="card-value purple">${s.betting_days}/${s.total_days}</div>
+      <div class="card-sub dim">${s.no_bet_days} no-bet days</div>
+    </div>
+  `;
+
+  // Charts
+  const labels = d.days.map(r => r.date.slice(5));  // MM-DD
+  const cumuls  = d.days.map(r => r.cumulative);
+  const dailies = d.days.map(r => r.pnl);
+
+  const chartDefaults = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 600 },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0d1117',
+        borderColor: '#1e2d3d',
+        borderWidth: 1,
+        titleColor: '#6e7681',
+        bodyColor: '#c9d1d9',
+        titleFont: { family: 'JetBrains Mono' },
+        bodyFont:  { family: 'JetBrains Mono' },
+      }
+    },
+    scales: {
+      x: {
+        ticks: { color: '#6e7681', font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 45 },
+        grid:  { color: 'rgba(30,45,61,0.5)' },
+      },
+      y: {
+        ticks: { color: '#6e7681', font: { family: 'JetBrains Mono', size: 10 },
+                 callback: v => '$' + v.toFixed(0) },
+        grid:  { color: 'rgba(30,45,61,0.5)' },
+      }
+    }
+  };
+
+  if (_pnlChart) _pnlChart.destroy();
+  _pnlChart = new Chart(document.getElementById('pnl-chart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: cumuls,
+        borderColor: '#00ff88',
+        backgroundColor: 'rgba(0,255,136,0.04)',
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 5,
+        pointBackgroundColor: '#00ff88',
+        fill: true,
+        tension: 0.3,
+      }]
+    },
+    options: chartDefaults,
+  });
+
+  if (_dailyChart) _dailyChart.destroy();
+  _dailyChart = new Chart(document.getElementById('daily-chart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: dailies,
+        backgroundColor: dailies.map(v => v >= 0 ? 'rgba(0,255,136,0.5)' : 'rgba(255,68,102,0.5)'),
+        borderColor:     dailies.map(v => v >= 0 ? '#00ff88' : '#ff4466'),
+        borderWidth: 1,
+        borderRadius: 2,
+      }]
+    },
+    options: chartDefaults,
+  });
+
+  // Day table
+  const tbody = document.getElementById('bt-tbody');
+  tbody.innerHTML = d.days.map(r => {
+    const pnlCls = r.pnl > 0 ? 'green' : r.pnl < 0 ? 'red' : 'dim';
+    const cumCls = r.cumulative > 0 ? 'green' : r.cumulative < 0 ? 'red' : 'dim';
+    const pCls   = r.model_prob >= 35 ? 'green' : 'yellow';
+    const rowCls = r.pnl > 0 ? 'row-win' : r.pnl < 0 ? 'row-loss' : '';
+    return `
+      <tr class="${rowCls}">
+        <td>${r.date}</td>
+        <td class="yellow">${r.actual}F</td>
+        <td class="dim">${r.forecast}F</td>
+        <td class="dim">${r.seasonal}F</td>
+        <td>${r.correct_bracket}</td>
+        <td class="${pCls}">${r.model_prob}%</td>
+        <td class="dim">${r.bets}</td>
+        <td class="dim">${r.won}/${r.lost}/${r.no_bet}</td>
+        <td class="${pnlCls}">${fmt.dollar(r.pnl)}</td>
+        <td class="${cumCls}">${fmt.dollar(r.cumulative)}</td>
+      </tr>`;
+  }).join('');
+}
+
+async function refreshBacktest() {
+  const btn = document.getElementById('btn-refresh-bt');
+  btn.classList.add('loading');
+  btn.textContent = '↺ running...';
+  window._btLoaded = false;
+  await fetch('/api/refresh/backtest');
+  await loadBacktest();
+  btn.classList.remove('loading');
+  btn.textContent = '↺ re-run';
+}
+
+// ── Trade log ──────────────────────────────────────────────────────────────
+async function loadTradeLog() {
+  const container = document.getElementById('log-container');
+  container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span>loading...</div>';
+  try {
+    const res = await fetch('/api/tradelog');
+    const rows = await res.json();
+    if (!rows.length) {
+      container.innerHTML = '<div class="empty-state">no trades logged yet.<br><span class="dim">run the live bot to populate this.</span></div>';
+      return;
+    }
+    container.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th><th>Ticker</th><th>Side</th>
+              <th>Contracts</th><th>Price</th><th>Edge</th>
+              <th>Our Prob</th><th>Dry Run</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.reverse().map(r => `
+              <tr>
+                <td class="dim">${r.timestamp}</td>
+                <td>${r.ticker}</td>
+                <td class="side-${r.side}">${r.side.toUpperCase()}</td>
+                <td>${r.contracts}</td>
+                <td class="dim">${r.price_cents}c</td>
+                <td class="green">+${r.edge_cents}c</td>
+                <td class="cyan">${(r.our_prob * 100).toFixed(1)}%</td>
+                <td class="${r.dry_run === 'True' ? 'yellow' : 'green'}">${r.dry_run === 'True' ? 'yes' : 'LIVE'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state" style="color:var(--red)">${e.message}</div>`;
+  }
+}
+
+// ── Auto-refresh countdown (5 min) ────────────────────────────────────────
+const REFRESH_SECS = 300;
+let _countdown = REFRESH_SECS;
+let _countdownActive = false;
+
+function startCountdown() {
+  _countdown = REFRESH_SECS;
+  _countdownActive = true;
+  document.getElementById('countdown-wrap').style.display = 'flex';
+}
+
+function tickCountdown() {
+  if (!_countdownActive) return;
+  _countdown--;
+  const pct = (_countdown / REFRESH_SECS) * 100;
+  document.getElementById('countdown-bar').style.width = pct + '%';
+  document.getElementById('countdown-label').textContent =
+    'refresh in ' + _countdown + 's';
+
+  if (_countdown <= 0) {
+    _countdownActive = false;
+    loadLive().then(startCountdown);
+  }
+}
+setInterval(tickCountdown, 1000);
+
+// ── Card flash on data update ──────────────────────────────────────────────
+function flashEl(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+loadLive().then(startCountdown);
+</script>
+</body>
+</html>

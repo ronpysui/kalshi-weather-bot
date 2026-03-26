@@ -1,0 +1,221 @@
+"""
+Kalshi API client.
+
+Public endpoints (market data) work without credentials.
+Order placement requires KALSHI_API_KEY_ID + KALSHI_PRIVATE_KEY_PATH in .env.
+"""
+
+import base64
+import time
+import os
+from datetime import datetime, timezone
+from typing import Optional
+
+import requests
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+
+import config
+
+
+# ── Auth helpers ──────────────────────────────────────────────────────────────
+
+def _load_private_key():
+    path = config.KALSHI_PRIVATE_KEY_PATH
+    if not path or not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        return serialization.load_pem_private_key(f.read(), password=None)
+
+
+def _sign(private_key, timestamp_ms: int, method: str, path: str) -> str:
+    path_no_query = path.split("?")[0]
+    message = f"{timestamp_ms}{method.upper()}{path_no_query}".encode()
+    sig = private_key.sign(
+        message,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.DIGEST_LENGTH,
+        ),
+        hashes.SHA256(),
+    )
+    return base64.b64encode(sig).decode()
+
+
+def _auth_headers(method: str, path: str) -> dict:
+    key = _load_private_key()
+    if not key or not config.KALSHI_API_KEY_ID:
+        return {}
+    ts = int(time.time() * 1000)
+    return {
+        "KALSHI-ACCESS-KEY": config.KALSHI_API_KEY_ID,
+        "KALSHI-ACCESS-TIMESTAMP": str(ts),
+        "KALSHI-ACCESS-SIGNATURE": _sign(key, ts, method, path),
+    }
+
+
+# ── Generic request ───────────────────────────────────────────────────────────
+
+def _get(path: str, params: dict = None, auth: bool = False) -> dict:
+    url = config.KALSHI_BASE_URL + path
+    headers = {"Content-Type": "application/json"}
+    if auth:
+        headers.update(_auth_headers("GET", "/trade-api/v2" + path))
+    resp = requests.get(url, headers=headers, params=params, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _post(path: str, body: dict) -> dict:
+    url = config.KALSHI_BASE_URL + path
+    headers = {
+        "Content-Type": "application/json",
+        **_auth_headers("POST", "/trade-api/v2" + path),
+    }
+    resp = requests.post(url, headers=headers, json=body, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+
+# ── Market data ───────────────────────────────────────────────────────────────
+
+def get_event(event_ticker: str) -> dict:
+    """Return event + all its markets."""
+    return _get(f"/events/{event_ticker}")
+
+
+def get_markets_for_series(series_ticker: str, status: str = "open",
+                           limit: int = 200) -> list[dict]:
+    """Return all markets for a series filtered by status."""
+    data = _get("/markets", params={
+        "series_ticker": series_ticker,
+        "status": status,
+        "limit": limit,
+    })
+    return data.get("markets", [])
+
+
+def get_market(ticker: str) -> dict:
+    return _get(f"/markets/{ticker}")["market"]
+
+
+def get_orderbook(ticker: str) -> dict:
+    return _get(f"/markets/{ticker}/orderbook")["orderbook_fp"]
+
+
+def get_todays_event_ticker() -> str:
+    """Build the event ticker for today's NYC high-temp market."""
+    now = datetime.now(timezone.utc)
+    # Kalshi format: KXHIGHNY-26MAR26  (YY + MON upper + DD)
+    return f"{config.SERIES_TICKER}-{now.strftime('%y%b%d').upper()}"
+
+
+def get_todays_markets() -> list[dict]:
+    """Return today's open bracket markets, sorted low → high."""
+    ticker = get_todays_event_ticker()
+    try:
+        data = get_event(ticker)
+    except requests.HTTPError as e:
+        if e.response.status_code == 404:
+            return []
+        raise
+    markets = data.get("markets", [])
+    return _sort_brackets(markets)
+
+
+def _sort_brackets(markets: list[dict]) -> list[dict]:
+    """Sort markets by their lower temperature bound."""
+    def _lower(m):
+        t = m["ticker"]
+        part = t.split("-")[-1]
+        if part.startswith("T") and m.get("floor_strike") is None:
+            return -999          # bottom cap
+        if part.startswith("T") and m.get("floor_strike") is not None:
+            return 999           # top cap
+        if part.startswith("B"):
+            return float(part[1:])
+        return 0
+    return sorted(markets, key=_lower)
+
+
+# ── Order placement ───────────────────────────────────────────────────────────
+
+def place_order(ticker: str, side: str, count: int,
+                price_cents: int, action: str = "buy") -> dict:
+    """
+    Place a limit order.
+
+    side        : "yes" or "no"
+    count       : number of contracts (each contract = $1 notional)
+    price_cents : limit price in cents (1–99)
+    """
+    if config.DRY_RUN:
+        print(f"[DRY RUN] Would place: {action} {count}x {side.upper()} "
+              f"on {ticker} @ {price_cents}¢")
+        return {"status": "dry_run"}
+
+    body = {
+        "ticker":     ticker,
+        "action":     action,
+        "side":       side,
+        "type":       "limit",
+        "count":      count,
+        "limit_price": price_cents,
+    }
+    return _post("/portfolio/orders", body)
+
+
+# ── Historical (backtest) ─────────────────────────────────────────────────────
+
+def get_settled_markets(series_ticker: str, limit: int = 300) -> list[dict]:
+    """Return settled markets for a series (all brackets, all past days)."""
+    return get_markets_for_series(series_ticker, status="settled", limit=limit)
+
+
+def get_settled_events(series_ticker: str, days: int = 30) -> list[dict]:
+    """
+    Return the last `days` unique settled event dates, each with its bracket
+    markets attached.
+
+    Returns list of dicts:
+        {
+            "event_ticker": str,
+            "date":         datetime.date,
+            "actual_high":  float,          # from expiration_value
+            "markets":      list[dict],     # sorted brackets
+        }
+    """
+    raw = get_settled_markets(series_ticker, limit=days * 10)
+
+    # Group by event_ticker
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for m in raw:
+        grouped[m["event_ticker"]].append(m)
+
+    events = []
+    for event_ticker, mkts in grouped.items():
+        # All markets in a day share the same expiration_value
+        exp_vals = [m.get("expiration_value") for m in mkts
+                    if m.get("expiration_value") not in (None, "")]
+        if not exp_vals:
+            continue
+        actual_high = float(exp_vals[0])
+
+        # Parse date from ticker: KXHIGHNY-26MAR26
+        try:
+            date_part = event_ticker.split("-", 1)[1]   # "26MAR26"
+            date = datetime.strptime(date_part, "%y%b%d").date()
+        except (IndexError, ValueError):
+            continue
+
+        events.append({
+            "event_ticker": event_ticker,
+            "date":         date,
+            "actual_high":  actual_high,
+            "markets":      _sort_brackets(mkts),
+        })
+
+    # Sort by date desc, take latest `days`
+    events.sort(key=lambda e: e["date"], reverse=True)
+    return events[:days]
