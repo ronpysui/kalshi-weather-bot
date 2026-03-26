@@ -1031,77 +1031,86 @@ setInterval(() => {
 function renderBetsBox(d, bankroll) {
   const body = document.getElementById('bets-body');
 
-  // LOCKED — show what was placed this morning
-  if (d.locked && d.lock && d.lock.bets && d.lock.bets.length > 0) {
-    const lk = d.lock;
-    body.innerHTML = `
-      <div style="width:100%">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-          <span style="color:var(--green);font-size:11px;font-weight:700;letter-spacing:.1em;">
-            LOCKED ${lk.locked_at.slice(11,16)} ET
-          </span>
-          <span class="dim" style="font-size:11px;">
-            forecast: ${lk.forecast}F &nbsp;|&nbsp; sigma: ${lk.sigma}F &nbsp;|&nbsp; fixed at bet window
-          </span>
-        </div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;">
-          ${lk.bets.map((b, i) => `
-            <div class="bet-card" style="border-color:rgba(0,255,136,0.2);opacity:0.85;">
-              <div class="bet-rank">#${i+1}</div>
-              <div class="bet-side ${b.side}">${b.side.toUpperCase()}</div>
-              <div class="bet-bracket">${b.label}</div>
-              <div class="bet-amount ${b.side}">$${(b.contracts * b.price / 100).toFixed(2)}</div>
-              <div class="bet-detail">${b.contracts} contract${b.contracts!==1?'s':''} @ ${b.price}c</div>
-              <div class="bet-meta">
-                <span class="bet-tag bet-tag-edge">edge +${b.edge}c</span>
-                <span class="bet-tag bet-tag-prob">${b.our_prob}% prob</span>
-              </div>
-              <div style="margin-top:10px;font-size:11px;color:var(--green);">&#10003; placed</div>
-            </div>`).join('')}
-        </div>
+  // ── Lock banner (always shown once prediction is locked) ──────────────────
+  const lk = d.lock;
+  let lockBanner = '';
+  if (lk) {
+    const lockedTime = lk.locked_at ? lk.locked_at.slice(11,16) : '--:--';
+    lockBanner = `
+      <div style="width:100%;margin-bottom:10px;display:flex;align-items:center;
+                  gap:12px;padding:8px 12px;background:rgba(0,255,136,0.05);
+                  border:1px solid rgba(0,255,136,0.15);border-radius:5px;">
+        <span style="color:var(--green);font-size:12px;font-weight:700;letter-spacing:.08em;">
+          🔒 PREDICTION LOCKED ${lockedTime} ET
+        </span>
+        <span class="dim" style="font-size:11px;">
+          forecast: <span style="color:var(--cyan)">${lk.forecast}°F</span>
+          &nbsp;·&nbsp; σ = ${lk.sigma}°F
+          &nbsp;·&nbsp; fixed for today
+        </span>
+      </div>`;
+  }
+
+  // ── BETS PLACED — show confirmed orders ───────────────────────────────────
+  if (d.bets_placed && lk && lk.bets && lk.bets.length > 0) {
+    body.innerHTML = lockBanner + `
+      <div style="display:flex;gap:12px;flex-wrap:wrap;width:100%">
+        ${lk.bets.map((b, i) => `
+          <div class="bet-card" style="border-color:rgba(0,255,136,0.2);">
+            <div class="bet-rank">#${i+1}</div>
+            <div class="bet-side ${b.side}">${b.side.toUpperCase()}</div>
+            <div class="bet-bracket">${b.label}</div>
+            <div class="bet-amount ${b.side}">$${(b.contracts * b.price / 100).toFixed(2)}</div>
+            <div class="bet-detail">${b.contracts} contract${b.contracts!==1?'s':''} @ ${b.price}c</div>
+            <div class="bet-meta">
+              <span class="bet-tag bet-tag-edge">edge +${b.edge}c</span>
+              <span class="bet-tag bet-tag-prob">${b.our_prob}% prob</span>
+            </div>
+            <div style="margin-top:10px;font-size:11px;color:var(--green);">&#10003; order placed</div>
+          </div>`).join('')}
       </div>`;
     return;
   }
 
-  // NOT YET IN BET WINDOW — show countdown
-  if (!d.locked && d.secs_to_bet > 60) {
+  // ── NO SIGNALS ────────────────────────────────────────────────────────────
+  if (!d.signals || d.signals.length === 0) {
+    // Show bet window countdown when no signals
     startBetCountdown(d.secs_to_bet);
     const h = String(Math.floor(d.secs_to_bet/3600)).padStart(2,'0');
     const m = String(Math.floor((d.secs_to_bet%3600)/60)).padStart(2,'0');
     const s = String(d.secs_to_bet%60).padStart(2,'0');
-    body.innerHTML = `<div class="no-bets-box" style="flex-direction:column;align-items:flex-start;gap:6px;">
-      <div style="font-size:11px;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;">
-        next prediction locks at ${d.bet_hour_et}:00 AM ET
-      </div>
-      <div style="display:flex;align-items:baseline;gap:8px;">
-        <span style="font-size:28px;font-weight:700;color:var(--cyan);letter-spacing:.04em;"
-              id="next-bet-countdown">${h}:${m}:${s}</span>
-        <span class="dim" style="font-size:11px;">until bet window</span>
-      </div>
-      <div class="dim" style="font-size:11px;margin-top:2px;">
-        Preview below — final signals will be computed fresh at ${d.bet_hour_et}:00 AM using that morning's NWS forecast.
-      </div>
-    </div>`;
-    return;
-  }
-
-  // NO SIGNALS
-  if (!d.signals || d.signals.length === 0) {
-    body.innerHTML = `<div class="no-bets-box">
+    body.innerHTML = lockBanner + `<div class="no-bets-box">
       <span class="no-bets-icon">--</span>
       <div>
-        <div style="color:var(--yellow);font-weight:600;margin-bottom:3px;">no bets today</div>
-        <div>No bracket has enough edge vs the market right now.</div>
+        <div style="color:var(--yellow);font-weight:600;margin-bottom:3px;">no signals today</div>
+        <div>No bracket clears the ${(d.min_edge*100).toFixed(0)}c edge threshold.</div>
+        ${!d.bets_placed ? `<div style="margin-top:6px;color:var(--text-dim);font-size:11px;">
+          Orders fire automatically at <span style="color:var(--cyan)">${d.bet_hour_et}:00 AM ET</span>
+          &nbsp;—&nbsp; <span id="next-bet-countdown">${h}:${m}:${s}</span>
+        </div>` : ''}
       </div>
     </div>`;
     return;
   }
 
-  body.innerHTML = d.signals.map((s, i) => {
-    const contracts = kellyContracts(s.our_prob, s.mkt_price, bankroll);
+  // ── SIGNALS — always show with Kelly sizing ───────────────────────────────
+  // Compute bet window countdown for the sub-note
+  startBetCountdown(d.secs_to_bet);
+  const ch = String(Math.floor(d.secs_to_bet/3600)).padStart(2,'0');
+  const cm = String(Math.floor((d.secs_to_bet%3600)/60)).padStart(2,'0');
+  const cs = String(d.secs_to_bet%60).padStart(2,'0');
+  const betNote = !d.bets_placed
+    ? `<div style="width:100%;padding:6px 2px;font-size:11px;color:var(--text-dim);">
+         ⏱ Orders auto-fire at <span style="color:var(--cyan)">${d.bet_hour_et}:00 AM ET</span>
+         &nbsp;—&nbsp; <span id="next-bet-countdown" style="color:var(--cyan);font-weight:600;">${ch}:${cm}:${cs}</span>
+         &nbsp;|&nbsp; <span style="color:var(--text-dim)">place manually below or wait for auto-fire</span>
+       </div>`
+    : '';
+
+  const cards = d.signals.map((s, i) => {
+    const contracts  = kellyContracts(s.our_prob, s.mkt_price, bankroll);
     const riskDollars = (contracts * s.mkt_price / 100).toFixed(2);
     const winDollars  = (contracts * (100 - s.mkt_price) / 100).toFixed(2);
-    const isBuying    = s.side === 'yes';
     const dryBadge    = d.dry_run ? '<span class="dry-badge">DRY</span>' : '';
     const btnId       = `lock-btn-${i}`;
     return `
@@ -1110,7 +1119,7 @@ function renderBetsBox(d, bankroll) {
         <div class="bet-side ${s.side}">${s.side.toUpperCase()}</div>
         <div class="bet-bracket">${s.label}</div>
         <div class="bet-amount ${s.side}">$${riskDollars}</div>
-        <div class="bet-detail">${contracts} contract${contracts!==1?'s':''} @ ${s.mkt_price}c &nbsp;|&nbsp; win $${winDollars}</div>
+        <div class="bet-detail">${contracts} contract${contracts!==1?'s':''} @ ${s.mkt_price}c &nbsp;|&nbsp; to win $${winDollars}</div>
         <div class="bet-meta">
           <span class="bet-tag bet-tag-edge">edge +${s.edge}c</span>
           <span class="bet-tag bet-tag-ev">EV +${s.ev}c</span>
@@ -1122,10 +1131,12 @@ function renderBetsBox(d, bankroll) {
           onclick="lockIn('${s.ticker}','${s.side}',${contracts},${s.mkt_price},'${btnId}')"
           ${contracts <= 0 ? 'disabled' : ''}
         >
-          &#9632; lock in bet ${dryBadge}
+          &#9632; place bet ${dryBadge}
         </button>
       </div>`;
   }).join('');
+
+  body.innerHTML = lockBanner + betNote + `<div style="display:flex;gap:12px;flex-wrap:wrap;width:100%">${cards}</div>`;
 }
 
 // ── Lock-in handler ────────────────────────────────────────────────────────

@@ -55,10 +55,21 @@ def today_str() -> str:
     return datetime.now(ET).date().isoformat()
 
 
-def is_locked() -> bool:
-    """Return True if bets have already been placed today."""
+def is_prediction_locked() -> bool:
+    """Return True if today's prediction (forecast + sigma) has been fixed."""
     lock = _load()
     return lock.get("date") == today_str()
+
+
+def is_locked() -> bool:
+    """Alias for is_prediction_locked() — kept for backward compatibility."""
+    return is_prediction_locked()
+
+
+def bets_are_placed() -> bool:
+    """Return True if orders have already been placed today."""
+    lock = _load()
+    return lock.get("date") == today_str() and lock.get("bets_placed", False)
 
 
 def get_lock() -> dict | None:
@@ -79,24 +90,56 @@ def in_bet_window() -> bool:
 
 
 def should_bet() -> bool:
-    """Return True if we should place bets right now (in window AND not locked)."""
-    return in_bet_window() and not is_locked()
+    """Return True if we should place orders right now (in window AND bets not yet placed)."""
+    return in_bet_window() and not bets_are_placed()
+
+
+def lock_prediction(forecast: float, sigma: float):
+    """
+    Lock today's prediction immediately on first daily fetch.
+    This fixes the forecast + sigma for the whole day regardless of bet window.
+    Orders are placed separately at BET_HOUR_ET via update_bets().
+    """
+    if is_prediction_locked():
+        return  # already locked — don't overwrite
+    now_et = datetime.now(ET)
+    data = {
+        "date":        today_str(),
+        "locked_at":   now_et.strftime("%Y-%m-%dT%H:%M:%S"),
+        "forecast":    forecast,
+        "sigma":       sigma,
+        "bets_placed": False,
+        "bets":        [],
+    }
+    _save(data)
+
+
+def update_bets(bets: list[dict]):
+    """
+    Record placed orders into today's existing lock file.
+    Call this after orders fire at BET_HOUR_ET.
+    """
+    data = _load()
+    if data.get("date") != today_str():
+        return  # no prediction lock for today — shouldn't happen
+    data["bets_placed"] = True
+    data["bets"]        = bets
+    _save(data)
 
 
 def lock(forecast: float, sigma: float, bets: list[dict]):
     """
-    Write today's lock file with the bets that were placed.
-
-    bets: list of dicts with keys: ticker, side, contracts, price, edge,
-          our_prob, label
+    Legacy one-shot lock (prediction + bets in one call).
+    Kept for backward compatibility with main.py standalone mode.
     """
     now_et = datetime.now(ET)
     data = {
-        "date":      today_str(),
-        "locked_at": now_et.strftime("%Y-%m-%dT%H:%M:%S"),
-        "forecast":  forecast,
-        "sigma":     sigma,
-        "bets":      bets,
+        "date":        today_str(),
+        "locked_at":   now_et.strftime("%Y-%m-%dT%H:%M:%S"),
+        "forecast":    forecast,
+        "sigma":       sigma,
+        "bets_placed": True,
+        "bets":        bets,
     }
     _save(data)
 

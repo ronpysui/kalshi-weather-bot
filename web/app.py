@@ -20,7 +20,7 @@ from weather.nws_forecast import get_effective_forecast
 from predictor.probability import parse_brackets, assign_probabilities
 from trader.edge import compute_signals
 from trader.sizer import kelly_contracts, expected_value
-from trader.daily_lock import get_lock, is_locked, should_bet
+from trader.daily_lock import get_lock, is_locked, bets_are_placed, lock_prediction, should_bet
 
 app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -50,6 +50,10 @@ def _fetch_live():
     brackets = assign_probabilities(brackets, mu=forecast, sigma=sigma)
     signals  = compute_signals(brackets)
 
+    # Lock prediction on first daily fetch — fixes forecast+sigma for the whole day.
+    # Orders fire separately at BET_HOUR_ET via main.py.
+    lock_prediction(forecast, sigma)
+
     now_et   = datetime.now(ET)
     lock     = get_lock()
 
@@ -72,8 +76,10 @@ def _fetch_live():
         "min_edge":     config.MIN_EDGE,
         "bet_hour_et":  config.BET_HOUR_ET,
         "secs_to_bet":  secs_to_bet,
-        "locked":       lock is not None,
-        "lock":         lock,
+        "prediction_locked": lock is not None,
+        "bets_placed":       lock is not None and lock.get("bets_placed", False),
+        "locked":            lock is not None,   # kept for backward compat
+        "lock":              lock,
         "brackets": [
             {
                 "label":      b.label,
