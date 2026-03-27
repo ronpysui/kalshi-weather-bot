@@ -280,7 +280,32 @@ def main():
         while True:
             bankroll = run_once(bankroll)
             run_baseball_once(bankroll)
-            time.sleep(config.POLL_INTERVAL_SECONDS)
+
+            # ── Adaptive sleep ────────────────────────────────────────────────
+            # Default: poll every POLL_INTERVAL_SECONDS (30 min).
+            # If any upcoming game is within 35 min of first pitch, shorten the
+            # sleep so the bot always gets at least one scan before pitch.
+            sleep_secs = config.POLL_INTERVAL_SECONDS
+            try:
+                if os.getenv("ODDS_API_KEY"):
+                    from baseball.odds_api import get_mlb_games
+                    games = get_mlb_games()
+                    soonest = min(
+                        (g["mins_to_game"] for g in games if g.get("mins_to_game", 999) > 5),
+                        default=999,
+                    )
+                    if soonest < 35:
+                        # Wake up 4 min before pitch so we don't miss the window
+                        adaptive = max(60, (soonest - 4) * 60)
+                        sleep_secs = min(sleep_secs, adaptive)
+                        console.print(
+                            f"[dim]Adaptive poll: next game in {soonest}m — "
+                            f"sleeping {sleep_secs // 60}m {sleep_secs % 60}s[/]"
+                        )
+            except Exception:
+                pass  # fallback to normal interval on any error
+
+            time.sleep(sleep_secs)
     except KeyboardInterrupt:
         console.print("\n[yellow]Bot stopped.[/]")
 
