@@ -1225,6 +1225,12 @@ function renderLive(d) {
     ${lockedAt ? `<div class="fh-lock">forecast locked<br><strong>${lockedAt}</strong><br><span>fixed for today</span></div>` : ''}
     <div class="fh-divider"></div>
     <div class="fh-stat">
+      <div class="fh-label">Kalshi Balance</div>
+      <div class="fh-stat-val" style="color:var(--green)">$${d.bankroll != null ? d.bankroll.toFixed(2) : '--'}</div>
+      <div class="fh-stat-sub">${d.dry_run ? 'dry run' : 'live account'}</div>
+    </div>
+    <div class="fh-divider"></div>
+    <div class="fh-stat">
       <div class="fh-label">Next Market Open</div>
       <div class="fh-stat-val" id="market-open-countdown" style="color:var(--cyan);font-size:1.3rem;letter-spacing:.05em;">--:--:--</div>
       <div class="fh-stat-sub">6:00 AM ET</div>
