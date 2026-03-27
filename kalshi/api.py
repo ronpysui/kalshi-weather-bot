@@ -21,11 +21,20 @@ import config
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
 def _load_private_key():
+    # Option 1: key contents pasted directly as env var (Railway / cloud)
+    pem = os.getenv("KALSHI_PRIVATE_KEY_CONTENTS", "")
+    if pem:
+        # Allow \n to be stored as literal \n in env var
+        pem = pem.replace("\\n", "\n").encode()
+        return serialization.load_pem_private_key(pem, password=None)
+
+    # Option 2: path to .key file on disk (local dev)
     path = config.KALSHI_PRIVATE_KEY_PATH
-    if not path or not os.path.exists(path):
-        return None
-    with open(path, "rb") as f:
-        return serialization.load_pem_private_key(f.read(), password=None)
+    if path and os.path.exists(path):
+        with open(path, "rb") as f:
+            return serialization.load_pem_private_key(f.read(), password=None)
+
+    return None
 
 
 def _sign(private_key, timestamp_ms: int, method: str, path: str) -> str:
