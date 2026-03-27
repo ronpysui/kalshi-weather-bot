@@ -854,6 +854,17 @@
       </div>
     </div>
 
+    <!-- ── 7-DAY FORECAST ─────────────────────────────────────────────── -->
+    <div class="panel" style="margin-top:16px;">
+      <div class="panel-header">
+        <div class="panel-title">7-day forecast</div>
+        <div class="panel-meta dim">NWS · NYC Central Park</div>
+      </div>
+      <div id="forecast-7day" style="display:flex;gap:8px;flex-wrap:wrap;padding:12px 0 4px;">
+        <div class="dim" style="padding:12px;">loading...</div>
+      </div>
+    </div>
+
     <!-- ── TODAY'S SIGNALS ────────────────────────────────────────────── -->
     <div class="panel" style="margin-top:16px;" id="signals-panel">
       <div class="panel-header">
@@ -1242,6 +1253,9 @@ function renderLive(d) {
   document.getElementById('bracket-meta').textContent =
     `based on N(${d.forecast}°F, σ=${d.sigma}°F) · morning forecast`;
 
+  // ── 7-day forecast strip ───────────────────────────────────────────────────
+  render7Day(d.forecast_7day || []);
+
   // ── Signals panel ──────────────────────────────────────────────────────────
   renderSignals(d);
 
@@ -1271,6 +1285,44 @@ function renderLiveError(msg) {
     `<div class="fh-loading" style="color:var(--red)">${msg}</div>`;
   document.getElementById('bracket-tbody').innerHTML =
     `<tr><td colspan="4" style="padding:24px;color:var(--red);text-align:center">${msg}</td></tr>`;
+}
+
+// ── 7-day forecast renderer ────────────────────────────────────────────────
+function render7Day(days) {
+  const el = document.getElementById('forecast-7day');
+  if (!days || days.length === 0) {
+    el.innerHTML = '<div class="dim" style="padding:12px;">No forecast data</div>';
+    return;
+  }
+  el.innerHTML = days.map(d => {
+    const isTomorrow = d.is_tomorrow;
+    const isToday    = d.is_today;
+    const border     = isTomorrow ? '2px solid var(--cyan)'
+                     : isToday    ? '2px solid var(--green)'
+                     :              '1px solid rgba(255,255,255,0.07)';
+    const bg         = isTomorrow ? 'rgba(0,212,255,0.07)'
+                     : isToday    ? 'rgba(0,255,136,0.05)'
+                     :              'rgba(255,255,255,0.02)';
+    const labelColor = isTomorrow ? 'var(--cyan)'
+                     : isToday    ? 'var(--green)'
+                     :              'var(--text-dim)';
+    const badge      = isTomorrow ? '<span style="font-size:9px;background:var(--cyan);color:#000;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:4px;">NEXT</span>'
+                     : isToday    ? '<span style="font-size:9px;background:var(--green);color:#000;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:4px;">TODAY</span>'
+                     : '';
+    return `
+      <div style="flex:1;min-width:100px;max-width:140px;padding:10px 12px;border-radius:6px;
+                  border:${border};background:${bg};text-align:center;">
+        <div style="font-size:11px;color:${labelColor};font-weight:600;letter-spacing:.05em;">
+          ${d.label.toUpperCase()}${badge}
+        </div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--fg);margin:6px 0;">
+          ${d.high}°F
+        </div>
+        <div style="font-size:10px;color:var(--text-dim);line-height:1.3;">
+          ${d.short_forecast}
+        </div>
+      </div>`;
+  }).join('');
 }
 
 // ── Signals renderer ───────────────────────────────────────────────────────

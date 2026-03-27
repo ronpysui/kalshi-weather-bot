@@ -16,7 +16,7 @@ from flask import Flask, jsonify, render_template
 
 import config
 from kalshi.api import get_todays_markets, get_account_balance
-from weather.nws_forecast import get_effective_forecast, get_current_temp, get_running_high
+from weather.nws_forecast import get_effective_forecast, get_current_temp, get_running_high, get_7day_forecast
 from predictor.probability import parse_brackets, assign_probabilities
 from trader.edge import compute_signals
 from trader.sizer import kelly_contracts, expected_value
@@ -73,9 +73,10 @@ def _fetch_live():
 
     brackets     = parse_brackets(markets)
     brackets     = assign_probabilities(brackets, mu=forecast, sigma=sigma)
-    running_high = get_running_high()
-    signals      = compute_signals(brackets, running_high=running_high)
-    current_temp = get_current_temp()
+    running_high  = get_running_high()
+    signals       = compute_signals(brackets, running_high=running_high)
+    current_temp  = get_current_temp()
+    forecast_7day = get_7day_forecast()
 
     now_et   = datetime.now(ET)
     lock     = get_lock()
@@ -100,6 +101,7 @@ def _fetch_live():
         "min_edge":     config.MIN_EDGE,
         "bet_hour_et":  config.BET_HOUR_ET,
         "secs_to_bet":  secs_to_bet,
+        "forecast_7day":     forecast_7day,
         "prediction_locked": lock is not None,
         "bets_placed":       lock is not None and lock.get("bets_placed", False),
         "locked":            lock is not None,   # kept for backward compat

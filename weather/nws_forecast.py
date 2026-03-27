@@ -65,6 +65,40 @@ def _hourly_max_today() -> float:
     return float(max(temps))
 
 
+# ── 7-day forecast ────────────────────────────────────────────────────────────
+
+def get_7day_forecast() -> list[dict]:
+    """
+    Return up to 7 daytime forecast periods from NWS.
+    Each entry: {date, label, high, short_forecast, is_today, is_tomorrow}
+    """
+    try:
+        data    = _get(config.NWS_FORECAST_URL)
+        periods = data["properties"]["periods"]
+        today   = datetime.now(ET).date()
+        results = []
+
+        for p in periods:
+            if not p["isDaytime"]:
+                continue
+            start = datetime.fromisoformat(p["startTime"]).astimezone(ET)
+            d     = start.date()
+            results.append({
+                "date":           d.isoformat(),
+                "label":          p["name"],          # "Today", "Friday", etc.
+                "high":           p["temperature"],
+                "short_forecast": p["shortForecast"],
+                "is_today":       d == today,
+                "is_tomorrow":    d == today.fromordinal(today.toordinal() + 1),
+            })
+            if len(results) >= 7:
+                break
+
+        return results
+    except Exception:
+        return []
+
+
 # ── Running high (live observations) ─────────────────────────────────────────
 
 def get_running_high() -> float | None:
