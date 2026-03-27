@@ -1680,16 +1680,17 @@ const BB_REFRESH_SEC   = 60;
 let _nextGameTimer     = null;
 let _nextGameEpoch     = null;   // ms epoch of next game's first pitch
 
-function _bbStartNextGameCountdown(commenceISO) {
+function _bbStartNextGameCountdown(minsToGame) {
   if (_nextGameTimer) { clearInterval(_nextGameTimer); _nextGameTimer = null; }
-  _nextGameEpoch = new Date(commenceISO).getTime();
+  // Compute target epoch from current time + remaining minutes
+  _nextGameEpoch = Date.now() + (minsToGame * 60 * 1000);
   _nextGameTimer = setInterval(_bbTickNextGame, 1000);
-  _bbTickNextGame();
+  _bbTickNextGame(); // immediate first render
 }
 
 function _bbTickNextGame() {
   const el = document.getElementById('bb-next-game-cd');
-  if (!el) return;  // element not in DOM yet — interval keeps running, will find it
+  if (!el || _nextGameEpoch === null) return;
   const diff = _nextGameEpoch - Date.now();
   if (diff <= 0) { el.textContent = 'starting now'; return; }
   const h = Math.floor(diff / 3600000);
@@ -1867,7 +1868,7 @@ async function loadBaseball(manual = false) {
     el.innerHTML = html;
     renderPnlChart(betsData);
     // Start next-game countdown AFTER DOM is updated so element exists
-    if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].commence);
+    if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].mins_to_game);
     _bbStartCountdown();
   } catch(e) {
     document.getElementById('baseball-content').innerHTML =
