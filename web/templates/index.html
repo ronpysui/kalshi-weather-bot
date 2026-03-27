@@ -1026,7 +1026,11 @@
   <div id="page-baseball" class="page">
     <div class="section-header">
       <div class="section-title">baseball · mlb</div>
-      <span class="dim" style="font-size:11px;">vegas consensus vs kalshi · pre-game EV</span>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="dim" style="font-size:11px">vegas consensus vs kalshi · pre-game EV</span>
+        <span id="bb-refresh-label" class="dim" style="font-size:11px"></span>
+        <button class="btn" onclick="loadBaseball(true)">↺ refresh</button>
+      </div>
     </div>
 
     <div id="baseball-content" style="padding:0 24px 24px">
@@ -1107,7 +1111,8 @@ function showPage(name, btn) {
   document.getElementById('page-' + name).classList.add('active');
   btn.classList.add('active');
   if (name === 'backtest' && !window._btLoaded) loadBacktest();
-  if (name === 'baseball') loadBaseball();
+  if (name === 'baseball') { loadBaseball(true); }
+  else { if (_bbRefreshTimer) { clearInterval(_bbRefreshTimer); _bbRefreshTimer = null; } const lbl = document.getElementById('bb-refresh-label'); if (lbl) lbl.textContent = ''; }
   if (name === 'log') loadTradeLog();
 }
 
@@ -1662,11 +1667,36 @@ async function refreshBacktest() {
 }
 
 // ── Trade log ──────────────────────────────────────────────────────────────
-let _bbPnlChart = null;
+let _bbPnlChart      = null;
+let _bbRefreshTimer  = null;
+let _bbCountdown     = 0;
+const BB_REFRESH_SEC = 60;
 
-async function loadBaseball() {
+function _bbTickCountdown() {
+  _bbCountdown--;
+  const lbl = document.getElementById('bb-refresh-label');
+  if (lbl) lbl.textContent = `refresh in ${_bbCountdown}s`;
+  if (_bbCountdown <= 0) {
+    clearInterval(_bbRefreshTimer);
+    _bbRefreshTimer = null;
+    // Only auto-refresh if baseball tab is still active
+    if (document.getElementById('page-baseball').classList.contains('active')) {
+      loadBaseball();
+    }
+  }
+}
+
+function _bbStartCountdown() {
+  if (_bbRefreshTimer) clearInterval(_bbRefreshTimer);
+  _bbCountdown = BB_REFRESH_SEC;
+  _bbRefreshTimer = setInterval(_bbTickCountdown, 1000);
+}
+
+async function loadBaseball(manual = false) {
   const el = document.getElementById('baseball-content');
-  el.innerHTML = '<div class="loading-overlay"><span class="spinner"></span>loading mlb games...</div>';
+  if (manual) {
+    el.innerHTML = '<div class="loading-overlay"><span class="spinner"></span>loading mlb games...</div>';
+  }
   try {
     const [res, betsRes] = await Promise.all([
       fetch('/api/baseball'),
@@ -1689,6 +1719,7 @@ async function loadBaseball() {
         </div>`;
       el.innerHTML = html;
       renderPnlChart(betsData);
+      _bbStartCountdown();
       return;
     }
 
@@ -1696,6 +1727,7 @@ async function loadBaseball() {
       html += `<div class="empty-state" style="color:var(--red)">${data.error}</div>`;
       el.innerHTML = html;
       renderPnlChart(betsData);
+      _bbStartCountdown();
       return;
     }
 
@@ -1787,9 +1819,11 @@ async function loadBaseball() {
 
     el.innerHTML = html;
     renderPnlChart(betsData);
+    _bbStartCountdown();
   } catch(e) {
     document.getElementById('baseball-content').innerHTML =
       `<div class="empty-state" style="color:var(--red)">Error: ${e.message}</div>`;
+    _bbStartCountdown();  // retry after countdown even on error
   }
 }
 
