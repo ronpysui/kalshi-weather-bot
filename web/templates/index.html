@@ -1762,10 +1762,9 @@ async function loadBaseball(manual = false) {
               const homeEdgeClass = homeEdgeVal >= 4 ? 'green' : homeEdgeVal <= -4 ? 'red' : 'dim';
               const awayEdgeClass = awayEdgeVal >= 4 ? 'green' : awayEdgeVal <= -4 ? 'red' : 'dim';
 
-              const placeBtn = bestSig ? `
-                <button class="btn btn-primary" style="margin-top:8px;width:100%" onclick="bbPlaceBet(this,'${bestSig.ticker}','${g.home}','${g.away}','${bestSig.team}','${bestSig.side}',${bestSig.contracts},${Math.round(bestSig.kalshi_prob)},${bestSig.vegas_prob},${bestSig.edge})">
-                  ■ PLACE BET ${bestSig.team.split(' ').pop()} <span class="tag tag-dry" style="margin-left:4px">DRY</span>
-                </button>` : '';
+              const placeBtn = bestSig
+                ? `<div style="margin-top:8px;font-size:10px;color:var(--text-dim)">● auto-bet: ${bestSig.contracts} contracts @ ${bestSig.kalshi_prob}¢ · risk $${bestSig.risk}</div>`
+                : '';
 
               return `
                 <div class="signal-card" style="min-width:260px;max-width:300px;${borderStyle}">
@@ -1809,7 +1808,6 @@ async function loadBaseball(manual = false) {
                       <div class="${awayEdgeClass}" style="font-size:12px;font-weight:700">${awayEdgeVal >= 0 ? '+' : ''}${awayEdgeVal}c</div>
                     </div>
                   </div>
-                  ${bestSig ? `<div class="dim" style="font-size:10px;margin-bottom:4px">${bestSig.contracts} contracts @ ${bestSig.kalshi_prob}¢ · risk $${bestSig.risk}</div>` : ''}
                   ${placeBtn}
                 </div>`;
             }).join('')}
