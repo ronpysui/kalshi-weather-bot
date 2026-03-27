@@ -40,7 +40,33 @@ class Signal:
         return self.bracket.label
 
 
-def compute_signals(brackets: list[Bracket]) -> list[Signal]:
+def _parse_bracket_bounds(label: str) -> tuple[float, float]:
+    """Return (lower, upper) temp bounds for a bracket label."""
+    label = label.lower().replace('°', '').strip()
+    if 'or above' in label:
+        lower = float(label.split('or above')[0].strip())
+        return lower, float('inf')
+    elif 'or below' in label:
+        upper = float(label.split('or below')[0].strip())
+        return float('-inf'), upper
+    elif ' to ' in label:
+        parts = label.split(' to ')
+        return float(parts[0].strip()), float(parts[1].strip())
+    return float('-inf'), float('inf')
+
+
+def bracket_is_still_possible(label: str, running_high: float) -> bool:
+    """
+    Return False if the observed running high has already ruled out this bracket.
+
+    If the temp has already been 70°F today, 'to 65°' brackets are impossible —
+    the daily high CANNOT be below 70°F. Don't waste a bet on a dead bracket.
+    """
+    _, upper = _parse_bracket_bounds(label)
+    return running_high <= upper
+
+
+def compute_signals(brackets: list[Bracket], running_high: float | None = None) -> list[Signal]:
     """
     Return directional, forecast-aligned signals sorted by edge (best first).
 
@@ -55,6 +81,10 @@ def compute_signals(brackets: list[Bracket]) -> list[Signal]:
     signals: list[Signal] = []
 
     for b in brackets:
+        # Skip brackets already ruled out by today's observed running high
+        if running_high is not None and not bracket_is_still_possible(b.label, running_high):
+            continue
+
         if b.our_prob >= 0.5:
             # ── Model favours YES ─────────────────────────────────────────────
             yes_edge = b.our_prob - b.market_yes_price

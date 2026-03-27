@@ -16,7 +16,7 @@ from flask import Flask, jsonify, render_template
 
 import config
 from kalshi.api import get_todays_markets, get_account_balance
-from weather.nws_forecast import get_effective_forecast, get_current_temp
+from weather.nws_forecast import get_effective_forecast, get_current_temp, get_running_high
 from predictor.probability import parse_brackets, assign_probabilities
 from trader.edge import compute_signals
 from trader.sizer import kelly_contracts, expected_value
@@ -71,9 +71,10 @@ def _fetch_live():
         sigma = config.SIGMA_MORNING
         lock_prediction(forecast, sigma)
 
-    brackets    = parse_brackets(markets)
-    brackets    = assign_probabilities(brackets, mu=forecast, sigma=sigma)
-    signals     = compute_signals(brackets)
+    brackets     = parse_brackets(markets)
+    brackets     = assign_probabilities(brackets, mu=forecast, sigma=sigma)
+    running_high = get_running_high()
+    signals      = compute_signals(brackets, running_high=running_high)
     current_temp = get_current_temp()
 
     now_et   = datetime.now(ET)

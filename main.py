@@ -30,7 +30,7 @@ from rich.console import Console
 
 import config
 from kalshi.api import get_todays_markets, place_order, get_account_balance
-from weather.nws_forecast import get_effective_forecast
+from weather.nws_forecast import get_effective_forecast, get_running_high
 from predictor.probability import parse_brackets, assign_probabilities
 from trader.edge import compute_signals
 from trader.sizer import kelly_contracts
@@ -106,8 +106,9 @@ def run_once(bankroll: float) -> float:
     brackets = parse_brackets(markets)
     brackets = assign_probabilities(brackets, mu=forecast, sigma=sigma)
 
-    # 5. Signals
-    signals = compute_signals(brackets)
+    # 5. Signals — filter out brackets already ruled out by today's running high
+    running_high = get_running_high()
+    signals = compute_signals(brackets, running_high=running_high)
 
     # 6. Render
     render_live(brackets, signals, forecast, sigma, bankroll)
