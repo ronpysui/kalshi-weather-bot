@@ -147,16 +147,17 @@ def get_orderbook(ticker: str) -> dict:
     return _get(f"/markets/{ticker}/orderbook")["orderbook_fp"]
 
 
-def get_todays_event_ticker() -> str:
-    """Build the event ticker for today's NYC high-temp market."""
+def get_todays_event_ticker(city_key: str = None) -> str:
+    """Build the event ticker for today's high-temp market for the given city."""
+    city_key = city_key or config.DEFAULT_CITY
+    series = config.CITIES[city_key]["kalshi_series"]
     now = datetime.now(timezone.utc)
-    # Kalshi format: KXHIGHNY-26MAR26  (YY + MON upper + DD)
-    return f"{config.SERIES_TICKER}-{now.strftime('%y%b%d').upper()}"
+    return f"{series}-{now.strftime('%y%b%d').upper()}"
 
 
-def get_todays_markets() -> list[dict]:
-    """Return today's open bracket markets, sorted low → high."""
-    ticker = get_todays_event_ticker()
+def get_todays_markets(city_key: str = None) -> list[dict]:
+    """Return today's open bracket markets for a city, sorted low → high."""
+    ticker = get_todays_event_ticker(city_key)
     try:
         data = get_event(ticker)
     except requests.HTTPError as e:

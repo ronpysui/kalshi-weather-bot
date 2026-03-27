@@ -24,6 +24,33 @@ NWS_HOURLY_URL   = "https://api.weather.gov/gridpoints/OKX/34,38/forecast/hourly
 NWS_STATION      = "KNYC"
 NWS_CLI_LOCATION = "NYC"
 
+# ── Cities ────────────────────────────────────────────────────────────────────
+CITIES = {
+    "NYC": {
+        "name":           "New York City",
+        "label":          "NYC",
+        "kalshi_series":  "KXHIGHNY",
+        "nws_station":    "KNYC",
+        "nws_office":     "OKX",
+        "nws_grid_x":     34,
+        "nws_grid_y":     38,
+        "lat":            40.7589,
+        "lon":           -73.9851,
+    },
+    "HOU": {
+        "name":           "Houston",
+        "label":          "HOU",
+        "kalshi_series":  "KXHIGHHOU",
+        "nws_station":    "KHOU",
+        "nws_office":     "HGX",
+        "nws_grid_x":     66,
+        "nws_grid_y":     97,
+        "lat":            29.7604,
+        "lon":           -95.3698,
+    },
+}
+DEFAULT_CITY = os.getenv("DEFAULT_CITY", "NYC")
+
 # ── Prediction model ──────────────────────────────────────────────────────────
 # Sigma (°F) used when no live observations are available yet (early morning).
 # Shrinks as the day progresses and actual readings come in.

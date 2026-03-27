@@ -174,6 +174,116 @@ def get_current_temp() -> float | None:
         return None
 
 
+# ── City-aware functions ──────────────────────────────────────────────────────
+
+def get_forecast_high_for_city(city: dict) -> float:
+    """Fetch NWS forecast high for a given city config dict."""
+    url = f"https://api.weather.gov/gridpoints/{city['nws_office']}/{city['nws_grid_x']},{city['nws_grid_y']}/forecast"
+    try:
+        data    = _get(url)
+        periods = data["properties"]["periods"]
+        today_et = datetime.now(ET).date()
+        for p in periods:
+            start = datetime.fromisoformat(p["startTime"]).astimezone(ET)
+            if start.date() == today_et and p["isDaytime"]:
+                return float(p["temperature"])
+        # fallback hourly
+        hourly_url = url.replace("/forecast", "/forecast/hourly")
+        hdata = _get(hourly_url)
+        hperiods = hdata["properties"]["periods"]
+        temps = [float(p["temperature"]) for p in hperiods
+                 if datetime.fromisoformat(p["startTime"]).astimezone(ET).date() == today_et]
+        return max(temps) if temps else 70.0
+    except Exception:
+        return 70.0
+
+
+def get_7day_forecast_for_city(city: dict) -> list[dict]:
+    """Return 7-day daytime forecast for a given city."""
+    url = f"https://api.weather.gov/gridpoints/{city['nws_office']}/{city['nws_grid_x']},{city['nws_grid_y']}/forecast"
+    try:
+        data    = _get(url)
+        periods = data["properties"]["periods"]
+        today   = datetime.now(ET).date()
+        results = []
+        for p in periods:
+            if not p["isDaytime"]:
+                continue
+            start = datetime.fromisoformat(p["startTime"]).astimezone(ET)
+            d     = start.date()
+            results.append({
+                "date":           d.isoformat(),
+                "label":          p["name"],
+                "high":           p["temperature"],
+                "short_forecast": p["shortForecast"],
+                "is_today":       d == today,
+                "is_tomorrow":    d == today.fromordinal(today.toordinal() + 1),
+            })
+            if len(results) >= 7:
+                break
+        return results
+    except Exception:
+        return []
+
+
+def get_current_temp_for_city(city: dict) -> float | None:
+    """Return latest observed temp for a city (°F)."""
+    url = f"https://api.weather.gov/stations/{city['nws_station']}/observations/latest"
+    try:
+        data = _get(url)
+        val  = data["properties"]["temperature"]["value"]
+        if val is None:
+            return None
+        return round(val * 9/5 + 32, 1)
+    except Exception:
+        return None
+
+
+def get_running_high_for_city(city: dict) -> float | None:
+    """Return the running high observed today for a city (°F)."""
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+    today_midnight = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    start = today_midnight.strftime("%Y-%m-%dT%H:%M:%SZ")
+    end   = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    url = (
+        f"https://api.weather.gov/stations/{city['nws_station']}/observations"
+        f"?start={start}&end={end}&limit=50"
+    )
+    try:
+        data     = _get(url)
+        features = data.get("features", [])
+        temps_f  = []
+        for f in features:
+            val = f["properties"]["temperature"]["value"]
+            if val is not None:
+                temps_f.append(val * 9/5 + 32)
+        return max(temps_f) if temps_f else None
+    except Exception:
+        return None
+
+
+def get_historical_forecasts_for_city(city: dict, start, end) -> dict[str, float]:
+    """Return Open-Meteo historical forecasts for a city."""
+    url = (
+        "https://historical-forecast-api.open-meteo.com/v1/forecast"
+        f"?latitude={city['lat']}&longitude={city['lon']}"
+        f"&start_date={start}&end_date={end}"
+        f"&daily=temperature_2m_max"
+        f"&temperature_unit=fahrenheit"
+        f"&timezone=America%2FNew_York"
+    )
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp.raise_for_status()
+        data  = resp.json()
+        dates = data["daily"]["time"]
+        highs = data["daily"]["temperature_2m_max"]
+        return {d: round(float(h), 1) for d, h in zip(dates, highs) if h is not None}
+    except Exception:
+        return {}
+
+
 # ── Calibrated sigma ──────────────────────────────────────────────────────────
 
 def get_current_sigma(running_high: float | None, forecast_high: float) -> float:

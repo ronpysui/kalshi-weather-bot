@@ -16,7 +16,11 @@ from flask import Flask, jsonify, render_template
 
 import config
 from kalshi.api import get_todays_markets, get_account_balance
-from weather.nws_forecast import get_effective_forecast, get_current_temp, get_running_high, get_7day_forecast
+from weather.nws_forecast import (
+    get_effective_forecast, get_current_temp, get_running_high, get_7day_forecast,
+    get_forecast_high_for_city, get_7day_forecast_for_city,
+    get_current_temp_for_city, get_running_high_for_city,
+)
 from predictor.probability import parse_brackets, assign_probabilities
 from trader.edge import compute_signals
 from trader.sizer import kelly_contracts, expected_value
@@ -26,15 +30,14 @@ app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 ET = ZoneInfo("America/New_York")
 
-# ── In-memory cache (refreshed every 5 min via background thread) ─────────────
-_cache = {
-    "live":      None,
-    "backtest":  None,
-    "last_live": None,
-    "last_bt":   None,
-    "errors":    [],
-}
+# ── Per-city in-memory cache ──────────────────────────────────────────────────
+_cache: dict[str, dict] = {}   # keyed by city code e.g. "NYC", "HOU"
 _cache_lock = threading.Lock()
+
+def _city_cache(city: str) -> dict:
+    if city not in _cache:
+        _cache[city] = {"live": None, "backtest": None, "last_live": None, "last_bt": None}
+    return _cache[city]
 
 
 def _inject_today(days: list, forecast: float) -> list:
@@ -71,34 +74,32 @@ def _temp_in_bracket(label: str, temp: float) -> bool:
     return False
 
 
-def _fetch_live():
-    markets = get_todays_markets()
-    if not markets:
-        return {"error": "No open markets found for today.", "brackets": [], "signals": []}
+def _fetch_live(city_key: str = None):
+    city_key = city_key or config.DEFAULT_CITY
+    city     = config.CITIES[city_key]
 
-    # ── Use locked forecast if we already have one for today ─────────────────
-    # This ensures bracket probabilities are frozen at market-open values and
-    # don't drift throughout the day as NWS updates its forecast.
-    existing_lock = get_lock()
+    markets = get_todays_markets(city_key)
+    if not markets:
+        return {"error": f"No open markets found for {city_key} today.", "brackets": [], "signals": [], "city": city_key}
+
+    existing_lock = get_lock(city_key)
     if existing_lock:
         forecast = existing_lock["forecast"]
         sigma    = existing_lock["sigma"]
     else:
-        # First call of the day — fetch NWS forecast and lock it immediately.
-        # Subsequent calls will use this locked value regardless of NWS updates.
-        forecast, _ = get_effective_forecast()
-        sigma = config.SIGMA_MORNING
-        lock_prediction(forecast, sigma)
+        forecast = get_forecast_high_for_city(city)
+        sigma    = config.SIGMA_MORNING
+        lock_prediction(forecast, sigma, city_key)
 
-    brackets     = parse_brackets(markets)
-    brackets     = assign_probabilities(brackets, mu=forecast, sigma=sigma)
-    running_high  = get_running_high()
+    brackets      = parse_brackets(markets)
+    brackets      = assign_probabilities(brackets, mu=forecast, sigma=sigma)
+    running_high  = get_running_high_for_city(city)
     signals       = compute_signals(brackets, running_high=running_high)
-    current_temp  = get_current_temp()
-    forecast_7day = get_7day_forecast()
+    current_temp  = get_current_temp_for_city(city)
+    forecast_7day = get_7day_forecast_for_city(city)
 
-    now_et   = datetime.now(ET)
-    lock     = get_lock()
+    now_et = datetime.now(ET)
+    lock   = get_lock(city_key)
 
     # Seconds until next bet window (BET_HOUR_ET AM tomorrow if already past today's)
     from datetime import timedelta
@@ -111,6 +112,8 @@ def _fetch_live():
     secs_to_bet   = int((bet_next - now_naive).total_seconds())
 
     return {
+        "city":         city_key,
+        "city_name":    city["name"],
         "timestamp":    now_et.strftime("%Y-%m-%d %H:%M:%S ET"),
         "current_temp": current_temp,
         "forecast":     round(forecast, 1),
@@ -227,13 +230,17 @@ def index():
 
 @app.route("/api/live")
 def api_live():
+    from flask import request as req
+    city = req.args.get("city", config.DEFAULT_CITY).upper()
+    if city not in config.CITIES:
+        city = config.DEFAULT_CITY
     with _cache_lock:
-        data = _cache["live"]
+        data = _city_cache(city).get("live")
     if data is None:
         try:
-            data = _fetch_live()
+            data = _fetch_live(city)
             with _cache_lock:
-                _cache["live"] = data
+                _city_cache(city)["live"] = data
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     return jsonify(data)

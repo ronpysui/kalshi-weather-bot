@@ -23,7 +23,12 @@ from zoneinfo import ZoneInfo
 import config
 
 ET = ZoneInfo("America/New_York")
-REDIS_KEY = "kalshi:daily_lock"
+def _redis_key(city: str) -> str:
+    return f"kalshi:daily_lock:{city}"
+
+
+def _file_path(city: str) -> str:
+    return f"data/daily_lock_{city}.json"
 
 
 # ── Storage backend (Redis or file) ───────────────────────────────────────────
@@ -40,36 +45,45 @@ def _get_redis():
         return None
 
 
-def _load() -> dict:
+def _load(city: str = None) -> dict:
+    city = city or config.DEFAULT_CITY
     r = _get_redis()
     if r:
         try:
-            raw = r.get(REDIS_KEY)
+            raw = r.get(_redis_key(city))
             return json.loads(raw) if raw else {}
         except Exception:
             pass
     # File fallback
-    if not os.path.exists(config.DAILY_LOCK_PATH):
+    path = _file_path(city)
+    if not os.path.exists(path):
+        # backward compat: try old single-city path
+        if os.path.exists(config.DAILY_LOCK_PATH):
+            try:
+                with open(config.DAILY_LOCK_PATH) as f:
+                    return json.load(f)
+            except Exception:
+                pass
         return {}
     try:
-        with open(config.DAILY_LOCK_PATH) as f:
+        with open(path) as f:
             return json.load(f)
     except Exception:
         return {}
 
 
-def _save(data: dict):
+def _save(data: dict, city: str = None):
+    city = city or config.DEFAULT_CITY
     r = _get_redis()
     if r:
         try:
-            # Expire after 48 hours — auto-cleans old locks
-            r.setex(REDIS_KEY, 48 * 3600, json.dumps(data))
+            r.setex(_redis_key(city), 48 * 3600, json.dumps(data))
             return
         except Exception:
             pass
     # File fallback
     os.makedirs("data", exist_ok=True)
-    with open(config.DAILY_LOCK_PATH, "w") as f:
+    with open(_file_path(city), "w") as f:
         json.dump(data, f, indent=2)
 
 
@@ -79,22 +93,23 @@ def today_str() -> str:
 
 # ── Prediction lock ────────────────────────────────────────────────────────────
 
-def is_prediction_locked() -> bool:
-    return _load().get("date") == today_str()
+def is_prediction_locked(city: str = None) -> bool:
+    return _load(city).get("date") == today_str()
 
 
-def is_locked() -> bool:
-    return is_prediction_locked()
+def is_locked(city: str = None) -> bool:
+    return is_prediction_locked(city)
 
 
-def get_lock() -> dict | None:
-    lock = _load()
+def get_lock(city: str = None) -> dict | None:
+    lock = _load(city)
     return lock if lock.get("date") == today_str() else None
 
 
-def lock_prediction(forecast: float, sigma: float):
+def lock_prediction(forecast: float, sigma: float, city: str = None):
     """Lock forecast + sigma at market open. No-op if already locked today."""
-    if is_prediction_locked():
+    city = city or config.DEFAULT_CITY
+    if is_prediction_locked(city):
         return
     now_et = datetime.now(ET)
     open_time = now_et.replace(
@@ -107,31 +122,32 @@ def lock_prediction(forecast: float, sigma: float):
         "sigma":       sigma,
         "bets_placed": False,
         "bets":        [],
-    })
+    }, city)
 
 
 # ── Opportunistic bet tracker ──────────────────────────────────────────────────
 
-def already_bet(ticker: str) -> bool:
+def already_bet(ticker: str, city: str = None) -> bool:
     """Return True if this bracket ticker has already been bet today."""
-    lock = get_lock()
+    lock = get_lock(city)
     if not lock:
         return False
     return any(b["ticker"] == ticker for b in lock.get("bets", []))
 
 
-def record_bet(bet: dict):
+def record_bet(bet: dict, city: str = None):
     """Add a single placed bet to today's lock. Call immediately after order fires."""
-    data = _load()
+    city = city or config.DEFAULT_CITY
+    data = _load(city)
     if data.get("date") != today_str():
         return
     data.setdefault("bets", []).append(bet)
     data["bets_placed"] = True
-    _save(data)
+    _save(data, city)
 
 
-def bets_are_placed() -> bool:
-    lock = get_lock()
+def bets_are_placed(city: str = None) -> bool:
+    lock = get_lock(city)
     return bool(lock and lock.get("bets_placed", False))
 
 

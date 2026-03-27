@@ -151,6 +151,19 @@
     nav button:hover { color: var(--text-bright); background: var(--bg2); }
     nav button.active { color: var(--green); background: rgba(0,255,136,0.08); }
 
+    /* ── City switcher ─────────────────────────────────────────────────────── */
+    .city-switcher {
+      display: flex; gap: 4px; margin-left: 12px;
+    }
+    .city-btn {
+      background: var(--bg2); border: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--mono); font-size: 11px;
+      font-weight: 600; padding: 3px 10px; border-radius: 4px;
+      cursor: pointer; letter-spacing: 0.05em; transition: all 0.15s;
+    }
+    .city-btn:hover { color: var(--cyan); border-color: var(--cyan-dim); }
+    .city-btn.active { color: var(--cyan); border-color: var(--cyan); background: rgba(0,212,255,0.08); }
+
     /* ── Layout ────────────────────────────────────────────────────────────── */
     main {
       padding: 20px 24px;
@@ -793,7 +806,7 @@
 <!-- ── Header ──────────────────────────────────────────────────────────────── -->
 <header>
   <div class="header-left">
-    <div class="logo">KXHIGHNY <span>// nyc temp bot</span></div>
+    <div class="logo" id="logo-text">KXHIGHNY <span>// nyc temp bot</span></div>
     <div id="mode-tag" class="tag tag-dry">DRY RUN</div>
   </div>
   <nav>
@@ -801,6 +814,10 @@
     <button onclick="showPage('backtest', this)">BACKTEST</button>
     <button onclick="showPage('log', this)">TRADE LOG</button>
   </nav>
+  <div class="city-switcher">
+    <button class="city-btn active" onclick="switchCity('NYC', this)">NYC</button>
+    <button class="city-btn" onclick="switchCity('HOU', this)">HOU</button>
+  </div>
   <div class="header-right">
     <div class="refresh-countdown" id="countdown-wrap" style="display:none">
       <span id="countdown-label">refresh in --s</span>
@@ -976,6 +993,26 @@ function updateClock() {
 }
 setInterval(updateClock, 1000);
 updateClock();
+
+// ── City switcher ──────────────────────────────────────────────────────────
+let currentCity = 'NYC';
+
+const CITY_META = {
+  NYC: { ticker: 'KXHIGHNY', label: 'nyc temp bot' },
+  HOU: { ticker: 'KXHIGHHOU', label: 'houston temp bot' },
+};
+
+function switchCity(city, btn) {
+  if (city === currentCity) return;
+  currentCity = city;
+  document.querySelectorAll('.city-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const meta = CITY_META[city];
+  document.getElementById('logo-text').innerHTML = `${meta.ticker} <span>// ${meta.label}</span>`;
+  window._liveLoaded = false;
+  window._btLoaded   = false;
+  loadLive();
+}
 
 // ── Nav ────────────────────────────────────────────────────────────────────
 function showPage(name, btn) {
@@ -1190,7 +1227,7 @@ async function lockIn(ticker, side, contracts, priceCents, btnId) {
 // ── Live ───────────────────────────────────────────────────────────────────
 async function loadLive() {
   try {
-    const res = await fetch('/api/live');
+    const res = await fetch(`/api/live?city=${currentCity}`);
     const d = await res.json();
     if (d.error) { renderLiveError(d.error); return; }
     renderLive(d);
