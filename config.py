@@ -40,7 +40,7 @@ CITIES = {
     "HOU": {
         "name":           "Houston",
         "label":          "HOU",
-        "kalshi_series":  "KXHIGHHOU",
+        "kalshi_series":  "KXHIGHTHOU",
         "nws_station":    "KHOU",
         "nws_office":     "HGX",
         "nws_grid_x":     66,

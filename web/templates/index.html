@@ -875,7 +875,7 @@
     <div class="panel" style="margin-top:16px;">
       <div class="panel-header">
         <div class="panel-title">7-day forecast</div>
-        <div class="panel-meta dim">NWS · NYC Central Park</div>
+        <div class="panel-meta dim" id="forecast-source-label">NWS · NYC Central Park</div>
       </div>
       <div id="forecast-7day" style="display:flex;gap:8px;flex-wrap:wrap;padding:12px 0 4px;">
         <div class="dim" style="padding:12px;">loading...</div>
@@ -998,8 +998,13 @@ updateClock();
 let currentCity = 'NYC';
 
 const CITY_META = {
-  NYC: { ticker: 'KXHIGHNY', label: 'nyc temp bot' },
-  HOU: { ticker: 'KXHIGHHOU', label: 'houston temp bot' },
+  NYC: { ticker: 'KXHIGHNY',   label: 'nyc temp bot' },
+  HOU: { ticker: 'KXHIGHTHOU', label: 'houston temp bot' },
+};
+
+const CITY_STATION = {
+  NYC: 'NYC Central Park',
+  HOU: 'Houston Hobby (KHOU)',
 };
 
 function switchCity(city, btn) {
@@ -1009,6 +1014,8 @@ function switchCity(city, btn) {
   btn.classList.add('active');
   const meta = CITY_META[city];
   document.getElementById('logo-text').innerHTML = `${meta.ticker} <span>// ${meta.label}</span>`;
+  const lbl = document.getElementById('forecast-source-label');
+  if (lbl) lbl.textContent = `NWS · ${CITY_STATION[city]}`;
   window._liveLoaded = false;
   window._btLoaded   = false;
   loadLive();
