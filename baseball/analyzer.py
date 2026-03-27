@@ -90,8 +90,9 @@ def analyze_game(game: dict) -> list[BaseballSignal]:
         return []
 
     for side, team, vegas_prob, kalshi_yes, ticker in [
-        ("home", game["home"], game["home_prob"], kalshi.get("home_yes", 0.5), kalshi.get("home_ticker", "")),
-        ("away", game["away"], game["away_prob"], kalshi.get("away_yes", 0.5), kalshi.get("away_ticker", "")),
+        # Use actual ask price for edge calc (home_ask/away_ask), not display price
+        ("home", game["home"], game["home_prob"], kalshi.get("home_ask", kalshi.get("home_yes", 0.5)), kalshi.get("home_ticker", "")),
+        ("away", game["away"], game["away_prob"], kalshi.get("away_ask", kalshi.get("away_yes", 0.5)), kalshi.get("away_ticker", "")),
     ]:
         if not ticker:
             continue

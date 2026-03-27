@@ -385,10 +385,12 @@ def api_baseball():
 
             home_prob   = round(g["home_prob"] * 100, 1)
             away_prob   = round(g["away_prob"] * 100, 1)
+            # Display: use home_yes/away_yes (complement-derived, matches Kalshi UI)
             home_kalshi = round(kalshi.get("home_yes", 0) * 100, 1)
             away_kalshi = round(kalshi.get("away_yes", 0) * 100, 1)
-            home_edge   = round(home_prob - home_kalshi, 1)
-            away_edge   = round(away_prob - away_kalshi, 1)
+            # Edge: use actual ask prices (home_ask/away_ask) so edge is accurate
+            home_edge   = round(home_prob - round(kalshi.get("home_ask", kalshi.get("home_yes", 0)) * 100, 1), 1)
+            away_edge   = round(away_prob - round(kalshi.get("away_ask", kalshi.get("away_yes", 0)) * 100, 1), 1)
 
             games_out.append({
                 "id":           g["id"],

@@ -195,21 +195,18 @@ def get_mlb_events(series: str = None) -> list[dict]:
             away_name = away_mkt.get("ticker", "Away").rsplit("-", 1)[-1]
             home_name = home_mkt.get("ticker", "Home").rsplit("-", 1)[-1]
 
-        # YES price: midpoint of bid/ask in cents → fraction
-        def _yes_price(m):
-            # last_price_dollars matches what Kalshi shows as "Chance" on their UI
-            last = m.get("last_price_dollars")
-            if last is not None:
-                return float(last)
-            # Fall back to bid/ask midpoint (dollar fields)
-            bid_d = m.get("yes_bid_dollars")
+        def _ask(m) -> float:
+            """Actual YES ask price — what you pay to buy YES."""
             ask_d = m.get("yes_ask_dollars")
-            if bid_d is not None and ask_d is not None:
-                return (float(bid_d) + float(ask_d)) / 2
-            # Legacy cent fields
-            bid = m.get("yes_bid") or 0
+            if ask_d is not None:
+                return float(ask_d)
             ask = m.get("yes_ask") or 99
-            return (bid + ask) / 2 / 100
+            return ask / 100
+
+        # Kalshi displays prices anchored on the away team's ask, home derived
+        # as complement so they sum to 100% (matching Kalshi's "Chance" UI).
+        away_ask = _ask(away_mkt)
+        home_ask = _ask(home_mkt)
 
         # Commence time from close_time
         commence = None
@@ -226,8 +223,12 @@ def get_mlb_events(series: str = None) -> list[dict]:
             "away":         away_name,
             "home_ticker":  home_ticker,
             "away_ticker":  away_ticker,
-            "home_yes":     _yes_price(home_mkt),
-            "away_yes":     _yes_price(away_mkt),
+            # Display: away anchors, home = complement → sums to 100% like Kalshi UI
+            "home_yes":     round(1.0 - away_ask, 4),
+            "away_yes":     round(away_ask, 4),
+            # Actual ask prices for edge calculation (what you'd really pay)
+            "home_ask":     round(home_ask, 4),
+            "away_ask":     round(away_ask, 4),
             "commence":     commence,
         })
 
