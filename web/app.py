@@ -97,6 +97,7 @@ def _fetch_live(city_key: str = None):
     signals       = compute_signals(brackets, running_high=running_high)
     current_temp  = get_current_temp_for_city(city)
     forecast_7day = get_7day_forecast_for_city(city)
+    bankroll      = get_account_balance() or config.BANKROLL
 
     now_et = datetime.now(ET)
     lock   = get_lock(city_key)
@@ -118,7 +119,7 @@ def _fetch_live(city_key: str = None):
         "current_temp": current_temp,
         "forecast":     round(forecast, 1),
         "sigma":        round(sigma, 1),
-        "bankroll":     get_account_balance() or config.BANKROLL,
+        "bankroll":     bankroll,
         "dry_run":      config.DRY_RUN,
         "min_edge":     config.MIN_EDGE,
         "bet_hour_et":  config.BET_HOUR_ET,
@@ -149,8 +150,8 @@ def _fetch_live(city_key: str = None):
                 "mkt_price":  round(s.mkt_price * 100, 1),
                 "edge":       round(s.edge * 100, 1),
                 "ev":         round(expected_value(s) * 100, 2),
-                "contracts":  kelly_contracts(s, config.BANKROLL),
-                "risk":       round(kelly_contracts(s, config.BANKROLL) * s.mkt_price, 2),
+                "contracts":  kelly_contracts(s, bankroll),
+                "risk":       round(kelly_contracts(s, bankroll) * s.mkt_price, 2),
                 "is_winning": (
                     _temp_in_bracket(s.label, current_temp) if s.side == "yes"
                     else not _temp_in_bracket(s.label, current_temp)
