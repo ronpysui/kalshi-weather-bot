@@ -1808,57 +1808,73 @@ async function loadBaseball(manual = false) {
                               : g.mins_to_game > 0  ? `🟢 ${g.mins_to_game}m`
                               : '🔴 LIVE';
 
-              const borderStyle = hasEdge ? 'border-color:rgba(0,255,136,0.4)' : '';
+              const cardOpacity  = hasEdge ? '1' : '0.55';
+              const borderStyle  = hasEdge
+                ? 'border-color:rgba(0,255,136,0.5);box-shadow:0 0 12px rgba(0,255,136,0.08)'
+                : 'border-color:rgba(255,255,255,0.06)';
               const homeEdgeClass = homeEdgeVal >= MIN_EDGE_DISPLAY ? 'green' : homeEdgeVal <= -MIN_EDGE_DISPLAY ? 'red' : 'dim';
               const awayEdgeClass = awayEdgeVal >= MIN_EDGE_DISPLAY ? 'green' : awayEdgeVal <= -MIN_EDGE_DISPLAY ? 'red' : 'dim';
 
-              const placeBtn = bestSig
-                ? `<div style="margin-top:8px;font-size:10px;color:var(--text-dim)">● auto-bet: ${bestSig.contracts} contracts @ ${bestSig.kalshi_prob}¢ · risk $${bestSig.risk}</div>`
-                : '';
+              const statusBadge = hasEdge
+                ? `<span style="font-size:10px;font-weight:700;color:var(--green)">● BET</span>`
+                : `<span style="font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:.05em">NO EDGE</span>`;
+
+              const autoBetRow = bestSig
+                ? `<div style="margin-top:10px;padding:6px 8px;background:rgba(0,255,136,0.07);
+                              border-radius:4px;border:1px solid rgba(0,255,136,0.15);
+                              font-size:10px;color:var(--green)">
+                    ▶ auto-bet ${bestSig.contracts} contracts @ ${bestSig.kalshi_prob}¢ · risk $${bestSig.risk}
+                   </div>`
+                : `<div style="margin-top:10px;padding:6px 8px;background:rgba(255,255,255,0.03);
+                              border-radius:4px;border:1px solid rgba(255,255,255,0.06);
+                              font-size:10px;color:rgba(255,255,255,0.2)">
+                    — no edge · bot will skip this game
+                   </div>`;
 
               return `
-                <div class="signal-card" style="min-width:260px;max-width:300px;${borderStyle}">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <div class="signal-card" style="min-width:270px;max-width:310px;opacity:${cardOpacity};
+                     transition:opacity .2s;${borderStyle}">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
                     <span class="dim" style="font-size:10px">${minsLabel}</span>
-                    ${hasEdge ? `<span class="green" style="font-size:10px;font-weight:700">● EDGE</span>` : ''}
+                    ${statusBadge}
                   </div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text-bright);margin-bottom:2px">${g.away}</div>
-                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">@ ${g.home}</div>
+                  <div style="font-size:14px;font-weight:700;color:var(--text-bright);margin-bottom:1px">${g.away}</div>
+                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px">@ ${g.home}</div>
 
-                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:4px">
-                    <div style="font-size:9px;color:var(--text-dim);text-align:center">VEGAS</div>
-                    <div style="font-size:9px;color:var(--text-dim);text-align:center">KALSHI</div>
-                    <div style="font-size:9px;color:var(--text-dim);text-align:center">EDGE</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;margin-bottom:3px">
+                    <div style="font-size:9px;color:var(--text-dim);text-align:center;letter-spacing:.08em">VEGAS</div>
+                    <div style="font-size:9px;color:var(--text-dim);text-align:center;letter-spacing:.08em">KALSHI</div>
+                    <div style="font-size:9px;color:var(--text-dim);text-align:center;letter-spacing:.08em">EDGE</div>
                   </div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:2px">
-                    <div style="background:var(--bg3);padding:4px;border-radius:3px;text-align:center">
-                      <div style="font-size:9px;color:var(--text-dim)">HOME</div>
-                      <div style="font-size:12px;font-weight:700;color:var(--cyan)">${g.home_prob}%</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:3px">
+                    <div style="background:var(--bg3);padding:5px 4px;border-radius:4px;text-align:center">
+                      <div style="font-size:8px;color:var(--text-dim);margin-bottom:2px">HOME</div>
+                      <div style="font-size:13px;font-weight:700;color:var(--cyan)">${g.home_prob}%</div>
                     </div>
-                    <div style="background:var(--bg3);padding:4px;border-radius:3px;text-align:center">
-                      <div style="font-size:9px;color:var(--text-dim)">&nbsp;</div>
-                      <div style="font-size:12px;font-weight:700;color:var(--text)">${g.home_kalshi}%</div>
+                    <div style="background:var(--bg3);padding:5px 4px;border-radius:4px;text-align:center">
+                      <div style="font-size:8px;color:var(--text-dim);margin-bottom:2px">&nbsp;</div>
+                      <div style="font-size:13px;font-weight:700;color:var(--text)">${g.home_kalshi}%</div>
                     </div>
-                    <div style="background:var(--bg3);padding:4px;border-radius:3px;text-align:center">
-                      <div style="font-size:9px;color:var(--text-dim)">&nbsp;</div>
-                      <div class="${homeEdgeClass}" style="font-size:12px;font-weight:700">${homeEdgeVal >= 0 ? '+' : ''}${homeEdgeVal}c</div>
-                    </div>
-                  </div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:10px">
-                    <div style="background:var(--bg3);padding:4px;border-radius:3px;text-align:center">
-                      <div style="font-size:9px;color:var(--text-dim)">AWAY</div>
-                      <div style="font-size:12px;font-weight:700;color:var(--cyan)">${g.away_prob}%</div>
-                    </div>
-                    <div style="background:var(--bg3);padding:4px;border-radius:3px;text-align:center">
-                      <div style="font-size:9px;color:var(--text-dim)">&nbsp;</div>
-                      <div style="font-size:12px;font-weight:700;color:var(--text)">${g.away_kalshi}%</div>
-                    </div>
-                    <div style="background:var(--bg3);padding:4px;border-radius:3px;text-align:center">
-                      <div style="font-size:9px;color:var(--text-dim)">&nbsp;</div>
-                      <div class="${awayEdgeClass}" style="font-size:12px;font-weight:700">${awayEdgeVal >= 0 ? '+' : ''}${awayEdgeVal}c</div>
+                    <div style="background:var(--bg3);padding:5px 4px;border-radius:4px;text-align:center">
+                      <div style="font-size:8px;color:var(--text-dim);margin-bottom:2px">&nbsp;</div>
+                      <div class="${homeEdgeClass}" style="font-size:13px;font-weight:700">${homeEdgeVal >= 0 ? '+' : ''}${homeEdgeVal}c</div>
                     </div>
                   </div>
-                  ${placeBtn}
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:0">
+                    <div style="background:var(--bg3);padding:5px 4px;border-radius:4px;text-align:center">
+                      <div style="font-size:8px;color:var(--text-dim);margin-bottom:2px">AWAY</div>
+                      <div style="font-size:13px;font-weight:700;color:var(--cyan)">${g.away_prob}%</div>
+                    </div>
+                    <div style="background:var(--bg3);padding:5px 4px;border-radius:4px;text-align:center">
+                      <div style="font-size:8px;color:var(--text-dim);margin-bottom:2px">&nbsp;</div>
+                      <div style="font-size:13px;font-weight:700;color:var(--text)">${g.away_kalshi}%</div>
+                    </div>
+                    <div style="background:var(--bg3);padding:5px 4px;border-radius:4px;text-align:center">
+                      <div style="font-size:8px;color:var(--text-dim);margin-bottom:2px">&nbsp;</div>
+                      <div class="${awayEdgeClass}" style="font-size:13px;font-weight:700">${awayEdgeVal >= 0 ? '+' : ''}${awayEdgeVal}c</div>
+                    </div>
+                  </div>
+                  ${autoBetRow}
                 </div>`;
             }).join('')}
           </div>
