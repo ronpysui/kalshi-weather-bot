@@ -799,6 +799,72 @@
       letter-spacing: 0.1em;
       margin-left: 4px;
     }
+
+    /* ── Baseball past bets ─────────────────────────────────────────────────── */
+    .bb-summary {
+      display: flex;
+      gap: 0;
+      background: var(--bg1);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .bb-stat {
+      flex: 1;
+      padding: 14px 18px;
+      border-right: 1px solid var(--border);
+      min-width: 0;
+    }
+    .bb-stat:last-child { border-right: none; }
+    .bb-stat-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+    .bb-stat-val {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .bb-stat-sub {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+    .bb-chart-wrap {
+      background: var(--bg1);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px 18px;
+      margin-bottom: 24px;
+    }
+    .bb-chart-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+    .bb-status {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .bb-status-won     { background: rgba(0,255,136,0.12); color: var(--green); }
+    .bb-status-lost    { background: rgba(255,68,102,0.12); color: var(--red); }
+    .bb-status-pending { background: rgba(255,215,0,0.10); color: var(--yellow); }
+    .bb-pnl-pos { color: var(--green); font-weight: 700; }
+    .bb-pnl-neg { color: var(--red);   font-weight: 700; }
+    .bb-pnl-nil { color: var(--text-dim); }
   </style>
 </head>
 <body>
@@ -1596,36 +1662,46 @@ async function refreshBacktest() {
 }
 
 // ── Trade log ──────────────────────────────────────────────────────────────
+let _bbPnlChart = null;
+
 async function loadBaseball() {
   const el = document.getElementById('baseball-content');
   el.innerHTML = '<div class="loading-overlay"><span class="spinner"></span>loading mlb games...</div>';
   try {
-    const res  = await fetch('/api/baseball');
-    const data = await res.json();
+    const [res, betsRes] = await Promise.all([
+      fetch('/api/baseball'),
+      fetch('/api/baseball/bets'),
+    ]);
+    const data     = await res.json();
+    const betsData = await betsRes.json();
 
+    let html = '';
+
+    // ── Past Bets + PnL ───────────────────────────────────────────────────────
+    html += renderBaseballBets(betsData);
+
+    // ── Odds key warning ─────────────────────────────────────────────────────
     if (!data.has_odds_key) {
-      el.innerHTML = `
-        <div class="empty-state" style="margin-top:40px">
+      html += `
+        <div class="empty-state" style="margin-top:24px">
           <div style="color:var(--yellow);font-size:14px;margin-bottom:12px">ODDS_API_KEY not set</div>
           <div class="dim">Add your free API key from <b>the-odds-api.com</b> to Railway env vars as <b>ODDS_API_KEY</b></div>
         </div>`;
+      el.innerHTML = html;
+      renderPnlChart(betsData);
       return;
     }
 
     if (data.error) {
-      el.innerHTML = `<div class="empty-state" style="color:var(--red)">${data.error}</div>`;
+      html += `<div class="empty-state" style="color:var(--red)">${data.error}</div>`;
+      el.innerHTML = html;
+      renderPnlChart(betsData);
       return;
     }
 
-    if (!data.games || !data.games.length) {
-      el.innerHTML = '<div class="empty-state">No MLB games matched today.<br><span class="dim">Check back closer to game time.</span></div>';
-      return;
-    }
-
-    // Signals section
-    let signalsHtml = '';
+    // ── Signals ───────────────────────────────────────────────────────────────
     if (data.signals && data.signals.length) {
-      signalsHtml = `
+      html += `
         <div style="margin-bottom:24px">
           <div class="panel-label" style="margin-bottom:12px">SIGNALS &nbsp;<span class="dim" style="font-size:10px">edge > 4¢ · pre-game window</span></div>
           <div style="display:flex;flex-wrap:wrap;gap:12px">
@@ -1652,60 +1728,278 @@ async function loadBaseball() {
                   </div>
                 </div>
                 <div class="dim" style="font-size:11px;margin-bottom:10px">${s.contracts} contracts @ ${s.kalshi_prob}¢ &nbsp;|&nbsp; risk $${s.risk}</div>
-                <button class="btn btn-primary" onclick="placeBet('${s.ticker}','yes',${s.contracts},${Math.round(s.kalshi_prob)})">
+                <button class="btn btn-primary" onclick="bbPlaceBet(this,'${s.ticker}','${s.home}','${s.away}','${s.team}','${s.side}',${s.contracts},${Math.round(s.kalshi_prob)},${s.vegas_prob},${s.edge})">
                   ■ PLACE BET <span class="tag tag-dry" style="margin-left:4px">DRY</span>
                 </button>
               </div>
             `).join('')}
           </div>
         </div>`;
-    } else {
-      signalsHtml = `<div class="empty-state" style="margin-bottom:24px">No signals found — no game within pre-game window with edge > 4¢</div>`;
+    } else if (data.games && data.games.length) {
+      html += `<div class="empty-state" style="margin-bottom:24px">No signals — no game within pre-game window with edge &gt; 4¢</div>`;
     }
 
-    // Games table
-    const gamesHtml = `
-      <div class="panel-label" style="margin-bottom:12px">TODAY'S GAMES &nbsp;<span class="dim" style="font-size:10px">vegas consensus vs kalshi</span></div>
-      <div class="table-wrap">
+    // ── Games table ───────────────────────────────────────────────────────────
+    if (data.games && data.games.length) {
+      html += `
+        <div class="panel-label" style="margin-bottom:12px">TODAY'S GAMES &nbsp;<span class="dim" style="font-size:10px">vegas consensus vs kalshi</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>MATCHUP</th><th>FIRST PITCH</th>
+                <th>VEGAS HOME</th><th>KALSHI HOME</th><th>HOME EDGE</th>
+                <th>VEGAS AWAY</th><th>KALSHI AWAY</th><th>AWAY EDGE</th>
+                <th>BOOKS</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.games.map(g => {
+                const homeEdge = (g.home_prob - g.home_kalshi).toFixed(1);
+                const awayEdge = (g.away_prob - g.away_kalshi).toFixed(1);
+                const pitchTime = new Date(g.commence).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',timeZone:'America/New_York'});
+                const st = g.mins_to_game > 30 ? `${pitchTime} ET` : g.mins_to_game > 0 ? `🟡 ${g.mins_to_game}m` : '🔴 LIVE';
+                return `<tr>
+                  <td style="font-weight:600">${g.away} @ ${g.home}</td>
+                  <td class="dim">${st}</td>
+                  <td class="cyan">${g.home_prob}%</td>
+                  <td>${g.home_kalshi}%</td>
+                  <td class="${parseFloat(homeEdge) >= 4 ? 'green' : parseFloat(homeEdge) <= -4 ? 'red' : 'dim'}">${homeEdge > 0 ? '+' : ''}${homeEdge}c</td>
+                  <td class="cyan">${g.away_prob}%</td>
+                  <td>${g.away_kalshi}%</td>
+                  <td class="${parseFloat(awayEdge) >= 4 ? 'green' : parseFloat(awayEdge) <= -4 ? 'red' : 'dim'}">${awayEdge > 0 ? '+' : ''}${awayEdge}c</td>
+                  <td class="dim">${g.num_books}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    el.innerHTML = html;
+    renderPnlChart(betsData);
+  } catch(e) {
+    document.getElementById('baseball-content').innerHTML =
+      `<div class="empty-state" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
+}
+
+function renderBaseballBets(betsData) {
+  const s    = betsData.summary || {};
+  const bets = betsData.bets   || [];
+
+  const pnl      = s.total_pnl  || 0;
+  const pnlClass = pnl > 0 ? 'bb-pnl-pos' : pnl < 0 ? 'bb-pnl-neg' : 'bb-pnl-nil';
+  const pnlSign  = pnl >= 0 ? '+' : '';
+  const winRate  = s.win_rate != null ? s.win_rate : '--';
+
+  let html = `
+    <div class="bb-summary">
+      <div class="bb-stat">
+        <div class="bb-stat-label">Bankroll</div>
+        <div class="bb-stat-val" style="color:var(--green)">$${(s.current_bankroll || 100).toFixed(2)}</div>
+        <div class="bb-stat-sub">started $${(s.starting_bankroll || 100).toFixed(2)}</div>
+      </div>
+      <div class="bb-stat">
+        <div class="bb-stat-label">Total P&amp;L</div>
+        <div class="bb-stat-val ${pnlClass}">${pnlSign}$${Math.abs(pnl).toFixed(2)}</div>
+        <div class="bb-stat-sub">wagered $${(s.total_wagered || 0).toFixed(2)}</div>
+      </div>
+      <div class="bb-stat">
+        <div class="bb-stat-label">Record</div>
+        <div class="bb-stat-val" style="color:var(--text-bright)">${s.wins || 0}W – ${s.losses || 0}L</div>
+        <div class="bb-stat-sub">${s.pending || 0} pending</div>
+      </div>
+      <div class="bb-stat">
+        <div class="bb-stat-label">Win Rate</div>
+        <div class="bb-stat-val" style="color:${winRate >= 55 ? 'var(--green)' : winRate >= 45 ? 'var(--yellow)' : 'var(--red)'}">${winRate}%</div>
+        <div class="bb-stat-sub">${(s.wins||0) + (s.losses||0)} resolved</div>
+      </div>
+    </div>`;
+
+  // PnL chart placeholder
+  html += `
+    <div class="bb-chart-wrap">
+      <div class="bb-chart-label">Bankroll curve</div>
+      <canvas id="bb-pnl-chart" height="80"></canvas>
+    </div>`;
+
+  // Split into pending (current positions) vs resolved (history)
+  const pending  = bets.filter(b => b.status === 'pending');
+  const resolved = bets.filter(b => b.status !== 'pending');
+
+  // ── Current Positions ─────────────────────────────────────────────────────
+  if (pending.length) {
+    html += `
+      <div class="panel-label" style="margin-bottom:12px">
+        CURRENT POSITIONS &nbsp;<span class="bb-status bb-status-pending" style="vertical-align:middle">${pending.length} open</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px">
+        ${pending.map(b => {
+          const cost = (b.contracts * b.price_cents / 100).toFixed(2);
+          const potW = (b.contracts * (100 - b.price_cents) / 100).toFixed(2);
+          const potL = (b.contracts * b.price_cents / 100).toFixed(2);
+          return `
+            <div class="signal-card" style="min-width:240px;max-width:300px;border-color:rgba(255,215,0,0.2)">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span class="${b.side === 'home' ? 'green' : 'cyan'}" style="font-size:10px;font-weight:700">${b.side.toUpperCase()}</span>
+                <span class="bb-status bb-status-pending">pending</span>
+              </div>
+              <div style="font-size:15px;font-weight:600;color:var(--text-bright);margin-bottom:4px">${b.team}</div>
+              <div class="dim" style="font-size:11px;margin-bottom:10px">${b.away} @ ${b.home}</div>
+              <div style="display:flex;gap:8px;margin-bottom:10px">
+                <div style="flex:1;text-align:center;background:var(--bg3);padding:5px;border-radius:4px">
+                  <div class="dim" style="font-size:9px">CONTRACTS</div>
+                  <div style="font-size:13px;font-weight:700;color:var(--text-bright)">${b.contracts}</div>
+                </div>
+                <div style="flex:1;text-align:center;background:var(--bg3);padding:5px;border-radius:4px">
+                  <div class="dim" style="font-size:9px">RISK</div>
+                  <div style="font-size:13px;font-weight:700;color:var(--yellow)">$${cost}</div>
+                </div>
+                <div style="flex:1;text-align:center;background:var(--bg3);padding:5px;border-radius:4px">
+                  <div class="dim" style="font-size:9px">TO WIN</div>
+                  <div style="font-size:13px;font-weight:700;color:var(--green)">+$${potW}</div>
+                </div>
+              </div>
+              <div class="dim" style="font-size:10px">Vegas ${b.vegas_prob}% · Kalshi ${b.price_cents}¢ · edge +${b.edge}c</div>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  // ── Past Bets history table ───────────────────────────────────────────────
+  if (resolved.length) {
+    html += `
+      <div class="panel-label" style="margin-bottom:12px">
+        PAST BETS &nbsp;<span class="dim" style="font-size:10px">auto-resolves from Kalshi results</span>
+      </div>
+      <div class="table-wrap" style="margin-bottom:24px">
         <table>
           <thead>
             <tr>
-              <th>MATCHUP</th>
-              <th>FIRST PITCH</th>
-              <th>VEGAS HOME</th>
-              <th>KALSHI HOME</th>
-              <th>HOME EDGE</th>
-              <th>VEGAS AWAY</th>
-              <th>KALSHI AWAY</th>
-              <th>AWAY EDGE</th>
-              <th>BOOKS</th>
+              <th>DATE</th><th>MATCHUP</th><th>BET ON</th><th>SIDE</th>
+              <th>CONTRACTS</th><th>PRICE</th><th>VEGAS</th><th>EDGE</th>
+              <th>STATUS</th><th>P&amp;L</th>
             </tr>
           </thead>
           <tbody>
-            ${data.games.map(g => {
-              const homeEdge = (g.home_prob - g.home_kalshi).toFixed(1);
-              const awayEdge = (g.away_prob - g.away_kalshi).toFixed(1);
-              const pitchTime = new Date(g.commence).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',timeZone:'America/New_York'});
-              const status = g.mins_to_game > 30 ? `${pitchTime} ET` : g.mins_to_game > 0 ? `🟡 ${g.mins_to_game}m` : '🔴 LIVE';
+            ${resolved.map(b => {
+              const dt  = new Date(b.timestamp).toLocaleDateString('en-US', {month:'short',day:'numeric'});
+              const pnl = b.pnl != null
+                ? `<span class="${b.pnl >= 0 ? 'bb-pnl-pos' : 'bb-pnl-neg'}">${b.pnl >= 0 ? '+' : ''}$${Math.abs(b.pnl).toFixed(2)}</span>`
+                : '<span class="bb-pnl-nil">–</span>';
               return `<tr>
-                <td style="font-weight:600">${g.away} @ ${g.home}</td>
-                <td class="dim">${status}</td>
-                <td class="cyan">${g.home_prob}%</td>
-                <td>${g.home_kalshi}%</td>
-                <td class="${parseFloat(homeEdge) >= 4 ? 'green' : parseFloat(homeEdge) <= -4 ? 'red' : 'dim'}">${homeEdge > 0 ? '+' : ''}${homeEdge}c</td>
-                <td class="cyan">${g.away_prob}%</td>
-                <td>${g.away_kalshi}%</td>
-                <td class="${parseFloat(awayEdge) >= 4 ? 'green' : parseFloat(awayEdge) <= -4 ? 'red' : 'dim'}">${awayEdge > 0 ? '+' : ''}${awayEdge}c</td>
-                <td class="dim">${g.num_books}</td>
+                <td class="dim">${dt}</td>
+                <td>${b.away} @ ${b.home}</td>
+                <td style="font-weight:600;color:var(--text-bright)">${b.team}</td>
+                <td class="${b.side === 'home' ? 'green' : 'cyan'}">${b.side.toUpperCase()}</td>
+                <td>${b.contracts}</td>
+                <td class="dim">${b.price_cents}¢</td>
+                <td class="cyan">${b.vegas_prob}%</td>
+                <td class="green">+${b.edge}c</td>
+                <td><span class="bb-status bb-status-${b.status}">${b.status}</span></td>
+                <td>${pnl}</td>
               </tr>`;
             }).join('')}
           </tbody>
         </table>
       </div>`;
+  }
 
-    el.innerHTML = signalsHtml + gamesHtml;
+  if (!bets.length) {
+    html += `
+      <div style="color:var(--text-dim);font-size:12px;margin-bottom:24px;padding:16px 0">
+        No bets placed yet — hit PLACE BET on a signal to start tracking.
+      </div>`;
+  }
+
+  return html;
+}
+
+function renderPnlChart(betsData) {
+  const canvas = document.getElementById('bb-pnl-chart');
+  if (!canvas) return;
+  const curve = (betsData.summary || {}).curve || [];
+
+  if (_bbPnlChart) { _bbPnlChart.destroy(); _bbPnlChart = null; }
+
+  const labels = curve.map(p => p.label);
+  const values = curve.map(p => p.bankroll);
+  const colors = curve.map((p, i) => {
+    if (i === 0) return 'rgba(0,212,255,0.8)';
+    return p.won ? 'rgba(0,255,136,1)' : 'rgba(255,68,102,1)';
+  });
+
+  _bbPnlChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        borderColor: '#00ff88',
+        borderWidth: 2,
+        pointBackgroundColor: colors,
+        pointRadius: curve.length <= 1 ? 4 : 5,
+        pointHoverRadius: 7,
+        tension: 0.3,
+        fill: {
+          target: 'origin',
+          above: 'rgba(0,255,136,0.06)',
+          below: 'rgba(255,68,102,0.06)',
+        },
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `$${ctx.parsed.y.toFixed(2)}`,
+          },
+          backgroundColor: '#0d1117',
+          borderColor: '#1e2d3d',
+          borderWidth: 1,
+          titleColor: '#c9d1d9',
+          bodyColor: '#00ff88',
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#6e7681', font: { family: 'JetBrains Mono', size: 10 } },
+          grid:  { color: 'rgba(30,45,61,0.5)' },
+        },
+        y: {
+          ticks: {
+            color: '#6e7681',
+            font: { family: 'JetBrains Mono', size: 10 },
+            callback: v => '$' + v.toFixed(0),
+          },
+          grid: { color: 'rgba(30,45,61,0.5)' },
+        }
+      }
+    }
+  });
+}
+
+async function bbPlaceBet(btn, ticker, home, away, team, side, contracts, priceCents, vegasPct, edge) {
+  btn.disabled = true;
+  btn.textContent = 'logging...';
+  try {
+    await fetch('/api/baseball/log_bet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ home, away, team, side, ticker, contracts,
+                             price_cents: priceCents, vegas_prob: vegasPct, edge }),
+    });
+    btn.textContent = '✓ LOGGED';
+    btn.style.background = 'rgba(0,255,136,0.12)';
+    btn.style.color = 'var(--green)';
+    // Reload bets section after short delay
+    setTimeout(() => loadBaseball(), 800);
   } catch(e) {
-    el.innerHTML = `<div class="empty-state" style="color:var(--red)">Error: ${e.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = 'ERROR — retry';
   }
 }
 

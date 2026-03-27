@@ -404,6 +404,33 @@ def api_baseball():
         return jsonify({"error": str(e), "games": [], "signals": []}), 500
 
 
+@app.route("/api/baseball/log_bet", methods=["POST"])
+def api_baseball_log_bet():
+    from flask import request as req
+    from baseball.bet_log import log_bet
+    body = req.get_json()
+    bet = log_bet(
+        home        = body.get("home", ""),
+        away        = body.get("away", ""),
+        team        = body.get("team", ""),
+        side        = body.get("side", ""),
+        ticker      = body.get("ticker", ""),
+        contracts   = int(body.get("contracts", 1)),
+        price_cents = int(body.get("price_cents", 50)),
+        vegas_prob  = float(body.get("vegas_prob", 0)),
+        edge        = float(body.get("edge", 0)),
+    )
+    return jsonify({"status": "ok", "bet": bet})
+
+
+@app.route("/api/baseball/bets")
+def api_baseball_bets():
+    from baseball.bet_log import get_all_bets, pnl_summary
+    bets = get_all_bets()
+    summary = pnl_summary(bets)
+    return jsonify({"bets": list(reversed(bets)), "summary": summary})
+
+
 @app.route("/api/tradelog")
 def api_tradelog():
     import csv
