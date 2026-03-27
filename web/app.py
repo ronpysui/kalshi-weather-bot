@@ -320,6 +320,30 @@ def api_place_order():
     return jsonify({"status": result.get("status", "ok")})
 
 
+@app.route("/api/baseball/debug")
+def api_baseball_debug():
+    try:
+        from baseball.odds_api import get_mlb_games
+        from baseball.kalshi_mlb import get_mlb_events, get_open_mlb_markets, discover_mlb_series
+
+        odds_games    = get_mlb_games()
+        series        = discover_mlb_series()
+        raw_markets   = get_open_mlb_markets(series)
+        kalshi_events = get_mlb_events()
+
+        return jsonify({
+            "odds_games_count":    len(odds_games),
+            "odds_games":          [{"home": g["home"], "away": g["away"]} for g in odds_games[:5]],
+            "kalshi_series_found": series,
+            "kalshi_raw_markets":  len(raw_markets),
+            "kalshi_sample":       raw_markets[:3] if raw_markets else [],
+            "kalshi_events":       kalshi_events[:3],
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+
+
 @app.route("/api/baseball")
 def api_baseball():
     try:
