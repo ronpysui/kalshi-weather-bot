@@ -1,35 +1,18 @@
 """
 Daily prediction lock + opportunistic bet tracker.
 
+Storage
+-------
+- If REDIS_URL env var is set (Railway): stores lock in Redis under
+  key "kalshi:daily_lock" — survives restarts and redeploys forever.
+- Otherwise: falls back to data/daily_lock.json (local dev).
+
 Philosophy
 ----------
 - Prediction (forecast + sigma) is locked ONCE at market open (6 AM ET).
 - Bets are placed OPPORTUNISTICALLY throughout the day — the moment a
   bracket's edge clears the threshold, the order fires immediately.
 - Each bracket ticker can only be bet ONCE per day (no doubling up).
-- The bot keeps scanning after placing bets — new opportunities can arise
-  in other brackets as Kalshi prices shift.
-
-Lock file format (data/daily_lock.json):
-{
-    "date":        "2026-03-26",
-    "locked_at":   "2026-03-26T06:00:00",
-    "forecast":    75.0,
-    "sigma":       3.0,
-    "bets_placed": true,          // true if at least one bet placed today
-    "bets": [
-        {
-            "ticker":    "KXHIGHNY-26MAR26-T73",
-            "side":      "yes",
-            "contracts": 24,
-            "price":     1,
-            "edge":      95.7,
-            "our_prob":  96.7,
-            "label":     "70° or above"
-        },
-        ...
-    ]
-}
 """
 
 import json
@@ -40,9 +23,32 @@ from zoneinfo import ZoneInfo
 import config
 
 ET = ZoneInfo("America/New_York")
+REDIS_KEY = "kalshi:daily_lock"
+
+
+# ── Storage backend (Redis or file) ───────────────────────────────────────────
+
+def _get_redis():
+    """Return a Redis client if REDIS_URL is configured, else None."""
+    url = os.getenv("REDIS_URL") or os.getenv("REDIS_PRIVATE_URL")
+    if not url:
+        return None
+    try:
+        import redis
+        return redis.from_url(url, decode_responses=True)
+    except Exception:
+        return None
 
 
 def _load() -> dict:
+    r = _get_redis()
+    if r:
+        try:
+            raw = r.get(REDIS_KEY)
+            return json.loads(raw) if raw else {}
+        except Exception:
+            pass
+    # File fallback
     if not os.path.exists(config.DAILY_LOCK_PATH):
         return {}
     try:
@@ -53,6 +59,15 @@ def _load() -> dict:
 
 
 def _save(data: dict):
+    r = _get_redis()
+    if r:
+        try:
+            # Expire after 48 hours — auto-cleans old locks
+            r.setex(REDIS_KEY, 48 * 3600, json.dumps(data))
+            return
+        except Exception:
+            pass
+    # File fallback
     os.makedirs("data", exist_ok=True)
     with open(config.DAILY_LOCK_PATH, "w") as f:
         json.dump(data, f, indent=2)
@@ -65,27 +80,20 @@ def today_str() -> str:
 # ── Prediction lock ────────────────────────────────────────────────────────────
 
 def is_prediction_locked() -> bool:
-    """Return True if today's forecast + sigma have been locked."""
     return _load().get("date") == today_str()
 
 
 def is_locked() -> bool:
-    """Alias for is_prediction_locked() — backward compat."""
     return is_prediction_locked()
 
 
 def get_lock() -> dict | None:
-    """Return today's lock dict, or None if not yet locked."""
     lock = _load()
     return lock if lock.get("date") == today_str() else None
 
 
 def lock_prediction(forecast: float, sigma: float):
-    """
-    Lock forecast + sigma at market open.
-    Stamps locked_at as MARKET_OPEN_HOUR_ET to reflect opening prediction.
-    No-op if already locked today.
-    """
+    """Lock forecast + sigma at market open. No-op if already locked today."""
     if is_prediction_locked():
         return
     now_et = datetime.now(ET)
@@ -113,44 +121,34 @@ def already_bet(ticker: str) -> bool:
 
 
 def record_bet(bet: dict):
-    """
-    Add a single placed bet to today's lock file.
-    Call this immediately after each order fires.
-
-    bet = {ticker, side, contracts, price, edge, our_prob, label}
-    """
+    """Add a single placed bet to today's lock. Call immediately after order fires."""
     data = _load()
     if data.get("date") != today_str():
-        return  # no lock yet — shouldn't happen
+        return
     data.setdefault("bets", []).append(bet)
     data["bets_placed"] = True
     _save(data)
 
 
 def bets_are_placed() -> bool:
-    """Return True if at least one bet has been placed today."""
     lock = get_lock()
     return bool(lock and lock.get("bets_placed", False))
 
 
-# ── Legacy helpers (kept for backward compat) ──────────────────────────────────
+# ── Market window helpers ──────────────────────────────────────────────────────
 
 def in_bet_window() -> bool:
-    """Market is open and we're past market open hour."""
     hour = datetime.now(ET).hour
     return config.MARKET_OPEN_HOUR_ET <= hour < config.MARKET_CLOSE_HOUR_ET
 
 
 def should_bet() -> bool:
-    """
-    Legacy: returns True if in market hours.
-    Main.py now uses already_bet(ticker) per-signal instead.
-    """
     return in_bet_window()
 
 
+# ── Legacy helpers (backward compat) ──────────────────────────────────────────
+
 def update_bets(bets: list[dict]):
-    """Legacy batch update — kept for backward compat."""
     data = _load()
     if data.get("date") != today_str():
         return
@@ -160,7 +158,6 @@ def update_bets(bets: list[dict]):
 
 
 def lock(forecast: float, sigma: float, bets: list[dict]):
-    """Legacy one-shot lock — kept for backward compat."""
     now_et = datetime.now(ET)
     _save({
         "date":        today_str(),
@@ -173,6 +170,11 @@ def lock(forecast: float, sigma: float, bets: list[dict]):
 
 
 def unlock_for_testing():
-    """Remove today's lock — dev/testing only."""
+    r = _get_redis()
+    if r:
+        try:
+            r.delete(REDIS_KEY)
+        except Exception:
+            pass
     if os.path.exists(config.DAILY_LOCK_PATH):
         os.remove(config.DAILY_LOCK_PATH)
