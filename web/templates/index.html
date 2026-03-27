@@ -1760,6 +1760,9 @@ async function loadBaseball(manual = false) {
     }
 
     // ── All games as cards, sorted by first pitch ─────────────────────────────
+    // Hoist upcoming so it's in scope when we call _bbStartNextGameCountdown
+    // after el.innerHTML = html (outside the if block below)
+    let upcoming = [];
     if (data.games && data.games.length) {
       const MIN_EDGE_DISPLAY = 4; // must match backend BASEBALL_MIN_EDGE
       const sigCount = data.games.filter(g =>
@@ -1767,7 +1770,7 @@ async function loadBaseball(manual = false) {
       ).length;
 
       // Find next upcoming game for the countdown (started after DOM renders)
-      const upcoming = data.games.filter(g => g.mins_to_game > 0)
+      upcoming = data.games.filter(g => g.mins_to_game > 0)
         .sort((a,b) => a.mins_to_game - b.mins_to_game);
 
       // Next-game banner
