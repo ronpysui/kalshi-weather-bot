@@ -159,6 +159,83 @@ def run_once(bankroll: float) -> float:
     return bankroll
 
 
+# ── Baseball worker ────────────────────────────────────────────────────────────
+
+def run_baseball_once(bankroll: float) -> None:
+    """
+    Scan today's MLB games for edges and auto-place bets.
+
+    Logic:
+    - Runs every poll cycle alongside the temp bot.
+    - For each upcoming game, checks if Vegas consensus vs Kalshi implied edge > 4¢.
+    - If edge found AND game hasn't started AND ticker not already bet → place + log.
+    - If no edge found now → does nothing. Will check again next poll (every 30 min).
+    - Hard lock: stops betting 5 min before first pitch (game odds become stale).
+    """
+    if not os.getenv("ODDS_API_KEY"):
+        return  # silently skip if no API key configured
+
+    try:
+        from baseball.odds_api    import get_mlb_games
+        from baseball.kalshi_mlb  import get_mlb_events, match_to_odds
+        from baseball.analyzer    import analyze_all
+        from baseball.bet_log     import log_bet
+        from kalshi.api           import place_order
+
+        odds_games    = get_mlb_games()
+        kalshi_events = get_mlb_events()
+        matched       = match_to_odds(kalshi_events, odds_games)
+        signals       = analyze_all(matched)
+
+        if not signals:
+            return
+
+        # Load already-bet tickers for today (reuse daily_lock infra)
+        from trader.daily_lock import already_bet as _already_bet, record_bet as _record_bet
+
+        for sig in signals:
+            bb_key = f"bb:{sig.ticker}"   # prefix to avoid collisions with temp bot
+            if _already_bet(bb_key):
+                continue  # already placed this game/side today
+
+            contracts   = max(1, int(bankroll * sig.kelly_frac / max(sig.kalshi_prob, 0.01)))
+            price_cents = round(sig.kalshi_prob * 100)
+
+            place_order(
+                ticker      = sig.ticker,
+                side        = "yes",
+                count       = contracts,
+                price_cents = price_cents,
+            )
+
+            # Log to baseball bet tracker (shows in dashboard)
+            log_bet(
+                home        = sig.home,
+                away        = sig.away,
+                team        = sig.team,
+                side        = sig.side,
+                ticker      = sig.ticker,
+                contracts   = contracts,
+                price_cents = price_cents,
+                vegas_prob  = round(sig.vegas_prob * 100, 1),
+                edge        = round(sig.edge * 100, 1),
+            )
+
+            # Guard so we don't bet the same ticker again today
+            _record_bet({"ticker": bb_key, "side": "yes", "contracts": contracts,
+                         "price": price_cents, "edge": round(sig.edge * 100, 1),
+                         "our_prob": round(sig.vegas_prob * 100, 1), "label": sig.team})
+
+            console.print(
+                f"[cyan]Baseball bet: {sig.team} ({sig.side}) "
+                f"{contracts}x @ {price_cents}c  edge=+{round(sig.edge*100,1)}c  "
+                f"({sig.mins_to_game}m to pitch)[/]"
+            )
+
+    except Exception as e:
+        console.print(f"[yellow]Baseball worker error: {e}[/]")
+
+
 # ── Backtest ───────────────────────────────────────────────────────────────────
 
 def run_backtest():
@@ -196,11 +273,13 @@ def main():
 
     if args.once:
         run_once(bankroll)
+        run_baseball_once(bankroll)
         return
 
     try:
         while True:
             bankroll = run_once(bankroll)
+            run_baseball_once(bankroll)
             time.sleep(config.POLL_INTERVAL_SECONDS)
     except KeyboardInterrupt:
         console.print("\n[yellow]Bot stopped.[/]")

@@ -18,7 +18,7 @@ ET = ZoneInfo("America/New_York")
 
 BASEBALL_MIN_EDGE    = float(os.getenv("BASEBALL_MIN_EDGE", "0.04"))  # 4 cents
 BASEBALL_KELLY_FRAC  = 0.25
-PRE_GAME_WINDOW_MIN  = 30   # analyze 30 min before first pitch
+LOCK_OUT_MIN         = 5    # stop betting this many minutes before first pitch
 
 
 @dataclass
@@ -63,21 +63,27 @@ def minutes_to_first_pitch(commence: datetime) -> int:
 def analyze_game(game: dict) -> list[BaseballSignal]:
     """
     Analyze a single matched game (Odds API + Kalshi).
-    Returns signals (0, 1, or 2) for home/away bets.
+    Returns signals whenever edge > threshold and game hasn't started.
+    The bot keeps checking on every poll — if no edge now, it will check again
+    next poll. Once the game starts (mins_to_game <= -LOCK_OUT_MIN), skip it.
     """
     signals = []
-    commence   = game["commence"]
-    mins_left  = minutes_to_first_pitch(commence)
+    commence  = game["commence"]
+    mins_left = minutes_to_first_pitch(commence)
 
-    # Determine status
-    if mins_left > PRE_GAME_WINDOW_MIN:
+    # Determine status label (for display only — doesn't gate signal generation)
+    if mins_left > 60:
         status = "upcoming"
-    elif mins_left > -5:
+    elif mins_left > LOCK_OUT_MIN:
         status = "pre_game"
-    elif mins_left > -200:
+    elif mins_left > -180:
         status = "live"
     else:
         status = "final"
+
+    # Hard stop: game has started — no more bets
+    if mins_left <= LOCK_OUT_MIN:
+        return []
 
     kalshi = game.get("kalshi", {})
     if not kalshi:
@@ -92,22 +98,22 @@ def analyze_game(game: dict) -> list[BaseballSignal]:
 
         edge = vegas_prob - kalshi_yes
         if edge < BASEBALL_MIN_EDGE:
-            continue
+            continue  # no edge yet — will re-check next poll
 
         signals.append(BaseballSignal(
-            game_id        = game["id"],
-            home           = game["home"],
-            away           = game["away"],
-            commence       = commence,
-            side           = side,
-            team           = team,
-            ticker         = ticker,
-            vegas_prob     = round(vegas_prob, 4),
-            kalshi_prob    = round(kalshi_yes, 4),
-            edge           = round(edge, 4),
-            ev             = round(_ev(vegas_prob, kalshi_yes), 4),
-            kelly_frac     = round(_kelly(vegas_prob, kalshi_yes), 4),
-            status         = status,
+            game_id         = game["id"],
+            home            = game["home"],
+            away            = game["away"],
+            commence        = commence,
+            side            = side,
+            team            = team,
+            ticker          = ticker,
+            vegas_prob      = round(vegas_prob, 4),
+            kalshi_prob     = round(kalshi_yes, 4),
+            edge            = round(edge, 4),
+            ev              = round(_ev(vegas_prob, kalshi_yes), 4),
+            kelly_frac      = round(_kelly(vegas_prob, kalshi_yes), 4),
+            status          = status,
             minutes_to_game = mins_left,
         ))
 
