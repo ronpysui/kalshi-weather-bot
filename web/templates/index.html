@@ -812,6 +812,7 @@
   <nav>
     <button class="active" onclick="showPage('live', this)">LIVE</button>
     <button onclick="showPage('backtest', this)">BACKTEST</button>
+    <button onclick="showPage('baseball', this)">BASEBALL</button>
     <button onclick="showPage('log', this)">TRADE LOG</button>
   </nav>
   <div class="city-switcher">
@@ -955,6 +956,18 @@
     </div>
   </div>
 
+  <!-- ── BASEBALL PAGE ────────────────────────────────────────────────────── -->
+  <div id="page-baseball" class="page">
+    <div class="section-header">
+      <div class="section-title">baseball · mlb</div>
+      <span class="dim" style="font-size:11px;">vegas consensus vs kalshi · pre-game EV</span>
+    </div>
+
+    <div id="baseball-content" style="padding:0 24px 24px">
+      <div class="dim" style="padding:40px;text-align:center">Loading MLB games...</div>
+    </div>
+  </div>
+
   <!-- ── TRADE LOG PAGE ────────────────────────────────────────────────────── -->
   <div id="page-log" class="page">
     <div class="section-header">
@@ -1028,6 +1041,7 @@ function showPage(name, btn) {
   document.getElementById('page-' + name).classList.add('active');
   btn.classList.add('active');
   if (name === 'backtest' && !window._btLoaded) loadBacktest();
+  if (name === 'baseball') loadBaseball();
   if (name === 'log') loadTradeLog();
 }
 
@@ -1582,6 +1596,119 @@ async function refreshBacktest() {
 }
 
 // ── Trade log ──────────────────────────────────────────────────────────────
+async function loadBaseball() {
+  const el = document.getElementById('baseball-content');
+  el.innerHTML = '<div class="loading-overlay"><span class="spinner"></span>loading mlb games...</div>';
+  try {
+    const res  = await fetch('/api/baseball');
+    const data = await res.json();
+
+    if (!data.has_odds_key) {
+      el.innerHTML = `
+        <div class="empty-state" style="margin-top:40px">
+          <div style="color:var(--yellow);font-size:14px;margin-bottom:12px">ODDS_API_KEY not set</div>
+          <div class="dim">Add your free API key from <b>the-odds-api.com</b> to Railway env vars as <b>ODDS_API_KEY</b></div>
+        </div>`;
+      return;
+    }
+
+    if (data.error) {
+      el.innerHTML = `<div class="empty-state" style="color:var(--red)">${data.error}</div>`;
+      return;
+    }
+
+    if (!data.games || !data.games.length) {
+      el.innerHTML = '<div class="empty-state">No MLB games matched today.<br><span class="dim">Check back closer to game time.</span></div>';
+      return;
+    }
+
+    // Signals section
+    let signalsHtml = '';
+    if (data.signals && data.signals.length) {
+      signalsHtml = `
+        <div style="margin-bottom:24px">
+          <div class="panel-label" style="margin-bottom:12px">SIGNALS &nbsp;<span class="dim" style="font-size:10px">edge > 4¢ · pre-game window</span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px">
+            ${data.signals.map(s => `
+              <div class="signal-card" style="min-width:260px;max-width:320px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                  <span class="${s.side === 'home' ? 'green' : 'cyan'}" style="font-size:10px;font-weight:700">${s.side.toUpperCase()}</span>
+                  <span class="dim" style="font-size:10px">${s.status === 'pre_game' ? '🟢 PRE-GAME' : s.status === 'live' ? '🔴 LIVE' : `${s.mins_to_game}m to pitch`}</span>
+                </div>
+                <div style="font-size:15px;font-weight:600;color:var(--text-bright);margin-bottom:8px">${s.team}</div>
+                <div class="dim" style="font-size:11px;margin-bottom:12px">${s.away} @ ${s.home}</div>
+                <div style="display:flex;gap:8px;margin-bottom:12px">
+                  <div style="flex:1;text-align:center;background:var(--bg3);padding:6px;border-radius:4px">
+                    <div class="dim" style="font-size:9px">VEGAS</div>
+                    <div class="cyan" style="font-size:14px;font-weight:700">${s.vegas_prob}%</div>
+                  </div>
+                  <div style="flex:1;text-align:center;background:var(--bg3);padding:6px;border-radius:4px">
+                    <div class="dim" style="font-size:9px">KALSHI</div>
+                    <div style="font-size:14px;font-weight:700;color:var(--text)">${s.kalshi_prob}%</div>
+                  </div>
+                  <div style="flex:1;text-align:center;background:var(--bg3);padding:6px;border-radius:4px">
+                    <div class="dim" style="font-size:9px">EDGE</div>
+                    <div class="green" style="font-size:14px;font-weight:700">+${s.edge}c</div>
+                  </div>
+                </div>
+                <div class="dim" style="font-size:11px;margin-bottom:10px">${s.contracts} contracts @ ${s.kalshi_prob}¢ &nbsp;|&nbsp; risk $${s.risk}</div>
+                <button class="btn btn-primary" onclick="placeBet('${s.ticker}','yes',${s.contracts},${Math.round(s.kalshi_prob)})">
+                  ■ PLACE BET <span class="tag tag-dry" style="margin-left:4px">DRY</span>
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    } else {
+      signalsHtml = `<div class="empty-state" style="margin-bottom:24px">No signals found — no game within pre-game window with edge > 4¢</div>`;
+    }
+
+    // Games table
+    const gamesHtml = `
+      <div class="panel-label" style="margin-bottom:12px">TODAY'S GAMES &nbsp;<span class="dim" style="font-size:10px">vegas consensus vs kalshi</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>MATCHUP</th>
+              <th>FIRST PITCH</th>
+              <th>VEGAS HOME</th>
+              <th>KALSHI HOME</th>
+              <th>HOME EDGE</th>
+              <th>VEGAS AWAY</th>
+              <th>KALSHI AWAY</th>
+              <th>AWAY EDGE</th>
+              <th>BOOKS</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.games.map(g => {
+              const homeEdge = (g.home_prob - g.home_kalshi).toFixed(1);
+              const awayEdge = (g.away_prob - g.away_kalshi).toFixed(1);
+              const pitchTime = new Date(g.commence).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',timeZone:'America/New_York'});
+              const status = g.mins_to_game > 30 ? `${pitchTime} ET` : g.mins_to_game > 0 ? `🟡 ${g.mins_to_game}m` : '🔴 LIVE';
+              return `<tr>
+                <td style="font-weight:600">${g.away} @ ${g.home}</td>
+                <td class="dim">${status}</td>
+                <td class="cyan">${g.home_prob}%</td>
+                <td>${g.home_kalshi}%</td>
+                <td class="${parseFloat(homeEdge) >= 4 ? 'green' : parseFloat(homeEdge) <= -4 ? 'red' : 'dim'}">${homeEdge > 0 ? '+' : ''}${homeEdge}c</td>
+                <td class="cyan">${g.away_prob}%</td>
+                <td>${g.away_kalshi}%</td>
+                <td class="${parseFloat(awayEdge) >= 4 ? 'green' : parseFloat(awayEdge) <= -4 ? 'red' : 'dim'}">${awayEdge > 0 ? '+' : ''}${awayEdge}c</td>
+                <td class="dim">${g.num_books}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+
+    el.innerHTML = signalsHtml + gamesHtml;
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
+}
+
 async function loadTradeLog() {
   const container = document.getElementById('log-container');
   container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span>loading...</div>';
