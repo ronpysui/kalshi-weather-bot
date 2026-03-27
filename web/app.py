@@ -37,6 +37,25 @@ _cache = {
 _cache_lock = threading.Lock()
 
 
+def _inject_today(days: list, forecast: float) -> list:
+    """
+    If NWS no longer has a daytime period for today (evening), prepend it
+    using the locked forecast so TODAY always appears in the 7-day strip.
+    """
+    from datetime import date as date_type
+    today = datetime.now(ET).date().isoformat()
+    if not any(d["date"] == today for d in days):
+        days = [{
+            "date":           today,
+            "label":          "Today",
+            "high":           forecast,
+            "short_forecast": "locked forecast",
+            "is_today":       True,
+            "is_tomorrow":    False,
+        }] + days
+    return days[:7]
+
+
 def _temp_in_bracket(label: str, temp: float) -> bool:
     """Return True if temp falls within the bracket described by label."""
     s = label.lower().replace('°', '').strip()
@@ -101,7 +120,7 @@ def _fetch_live():
         "min_edge":     config.MIN_EDGE,
         "bet_hour_et":  config.BET_HOUR_ET,
         "secs_to_bet":  secs_to_bet,
-        "forecast_7day":     forecast_7day,
+        "forecast_7day":     _inject_today(forecast_7day, forecast),
         "prediction_locked": lock is not None,
         "bets_placed":       lock is not None and lock.get("bets_placed", False),
         "locked":            lock is not None,   # kept for backward compat
