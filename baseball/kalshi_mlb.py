@@ -32,24 +32,42 @@ def _team_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
 
 
+MLB_SERIES_CANDIDATES = [
+    "KXMLBGAME",
+    "KXMLBWIN",
+    "KXBASEBALLWIN",
+    "KXBASEBALLMLBWIN",
+]
+
 def get_open_mlb_markets(series: str = None) -> list[dict]:
     """
     Return today's open Kalshi MLB individual game markets.
-    Searches for markets closing today (game win markets close at first pitch).
+    Tries known MLB win series tickers first, then falls back to broad search.
     """
+    # Try known series tickers first
+    for s in MLB_SERIES_CANDIDATES:
+        try:
+            data = _get("/markets", {"series_ticker": s, "status": "open", "limit": 50})
+            markets = data.get("markets", [])
+            if markets:
+                print(f"[kalshi_mlb] Found MLB game markets under series: {s}")
+                return markets
+        except Exception:
+            continue
+
+    # Fallback: broad date-range search filtered to MLB game markets
     from datetime import date, timedelta
-    today     = date.today()
-    tomorrow  = today + timedelta(days=1)
+    today    = date.today()
+    tomorrow = today + timedelta(days=1)
 
     all_markets = []
     cursor = None
-
     while True:
         params = {
-            "status":            "open",
-            "limit":             200,
-            "min_close_ts":      int(datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=timezone.utc).timestamp()),
-            "max_close_ts":      int(datetime(tomorrow.year, tomorrow.month, tomorrow.day, 6, 0, 0, tzinfo=timezone.utc).timestamp()),
+            "status":       "open",
+            "limit":        200,
+            "min_close_ts": int(datetime(today.year, today.month, today.day, 10, 0, 0, tzinfo=timezone.utc).timestamp()),
+            "max_close_ts": int(datetime(tomorrow.year, tomorrow.month, tomorrow.day, 8, 0, 0, tzinfo=timezone.utc).timestamp()),
         }
         if cursor:
             params["cursor"] = cursor
@@ -58,14 +76,8 @@ def get_open_mlb_markets(series: str = None) -> list[dict]:
         except Exception as e:
             print(f"[kalshi_mlb] Error: {e}")
             break
-
         markets = data.get("markets", [])
-        # Filter to baseball game markets — title contains "win" and team names
-        baseball = [
-            m for m in markets
-            if _is_game_market(m)
-        ]
-        all_markets.extend(baseball)
+        all_markets.extend([m for m in markets if _is_game_market(m)])
         cursor = data.get("cursor")
         if not cursor or len(markets) < 200:
             break
@@ -97,6 +109,44 @@ def discover_mlb_series() -> str | None:
     return "KXMLB"
 
 
+def _parse_event_teams(event_ticker: str, market_tickers: list[str]) -> tuple[str, str]:
+    """
+    Determine which market ticker is away and which is home.
+
+    Kalshi event format: KXMLBGAME-{YY}{MON}{DD}{HHMM}{away_abbr}{home_abbr}
+    Market tickers end with -{team_abbr}.
+
+    Strategy: extract the per-market team suffix and check which comes first
+    in the concatenated teams portion of the event ticker.
+    """
+    # Get suffix after last hyphen for each market ticker
+    suffixes = [t.rsplit("-", 1)[-1] for t in market_tickers]
+
+    # Event ticker date/time prefix is YY(2) + MON(3) + DD(2) + HHMM(4) = 11 chars
+    # after the series prefix "KXMLBGAME-"
+    inner = event_ticker.split("-", 1)[-1] if "-" in event_ticker else event_ticker
+    # inner = e.g. "26MAR291920CLESEA"
+    teams_str = inner[11:]  # strip date+time prefix
+
+    # Find which suffix appears first in the concatenated teams string
+    positions = {}
+    for s in suffixes:
+        pos = teams_str.find(s)
+        positions[s] = pos if pos >= 0 else 999
+
+    if len(suffixes) == 2:
+        s0, s1 = suffixes
+        if positions[s0] <= positions[s1]:
+            away_suffix, home_suffix = s0, s1
+        else:
+            away_suffix, home_suffix = s1, s0
+        away_ticker = next(t for t in market_tickers if t.endswith(f"-{away_suffix}"))
+        home_ticker = next(t for t in market_tickers if t.endswith(f"-{home_suffix}"))
+        return away_ticker, home_ticker
+
+    return market_tickers[0], market_tickers[1]
+
+
 def get_mlb_events(series: str = None) -> list[dict]:
     """
     Group open markets by event and extract team + price info.
@@ -117,7 +167,6 @@ def get_mlb_events(series: str = None) -> list[dict]:
     if not markets:
         return []
 
-    # Group by event_ticker
     from collections import defaultdict
     grouped = defaultdict(list)
     for m in markets:
@@ -126,64 +175,51 @@ def get_mlb_events(series: str = None) -> list[dict]:
     events = []
     for event_ticker, mkts in grouped.items():
         if len(mkts) < 2:
-            continue  # need at least home + away
+            continue
 
-        # Parse teams from subtitle or title
-        home, away = None, None
-        home_ticker, away_ticker = None, None
-        home_yes, away_yes = None, None
+        # Determine home/away from ticker structure
+        away_ticker, home_ticker = _parse_event_teams(
+            event_ticker, [m["ticker"] for m in mkts]
+        )
+
+        away_mkt = next((m for m in mkts if m["ticker"] == away_ticker), mkts[0])
+        home_mkt = next((m for m in mkts if m["ticker"] == home_ticker), mkts[1])
+
+        # Parse team names from title: "Away Team vs Home Team Winner?"
+        title = (away_mkt.get("title") or "").replace(" Winner?", "").replace(" winner?", "")
+        if " vs " in title:
+            parts = title.split(" vs ", 1)
+            away_name = parts[0].strip()
+            home_name = parts[1].strip()
+        else:
+            away_name = away_mkt.get("ticker", "Away").rsplit("-", 1)[-1]
+            home_name = home_mkt.get("ticker", "Home").rsplit("-", 1)[-1]
+
+        # YES price: midpoint of bid/ask in cents → fraction
+        def _yes_price(m):
+            bid = m.get("yes_bid") or 0
+            ask = m.get("yes_ask") or 99
+            return (bid + ask) / 2 / 100
+
+        # Commence time from close_time
         commence = None
+        ct = away_mkt.get("close_time") or home_mkt.get("close_time")
+        if ct:
+            try:
+                commence = datetime.fromisoformat(ct.replace("Z", "+00:00"))
+            except Exception:
+                pass
 
-        for m in mkts:
-            title = (m.get("title") or "").lower()
-            subtitle = (m.get("subtitle") or "").lower()
-            ticker = m["ticker"]
-
-            # Try to extract close time as commence time
-            if not commence and m.get("close_time"):
-                try:
-                    commence = datetime.fromisoformat(
-                        m["close_time"].replace("Z", "+00:00")
-                    )
-                except Exception:
-                    pass
-
-            # yes_bid / yes_ask midpoint as price
-            yes_bid = m.get("yes_bid", 0) or 0
-            yes_ask = m.get("yes_ask", 99) or 99
-            yes_price = (yes_bid + yes_ask) / 2 / 100  # cents → fraction
-
-            # Identify home vs away from title keywords
-            if "home" in title or "home" in subtitle:
-                home_ticker = ticker
-                home_yes = yes_price
-                # Try extracting team from title
-                home = m.get("result_at_expiry") or m.get("title", "")
-            elif "away" in title or "away" in subtitle or "visitor" in title:
-                away_ticker = ticker
-                away_yes = yes_price
-                away = m.get("result_at_expiry") or m.get("title", "")
-
-        # Fallback: use first two markets
-        if not home_ticker and len(mkts) >= 2:
-            home_ticker = mkts[0]["ticker"]
-            away_ticker = mkts[1]["ticker"]
-            home_yes = ((mkts[0].get("yes_bid", 0) or 0) + (mkts[0].get("yes_ask", 99) or 99)) / 2 / 100
-            away_yes = ((mkts[1].get("yes_bid", 0) or 0) + (mkts[1].get("yes_ask", 99) or 99)) / 2 / 100
-            home = mkts[0].get("title", "Team A")
-            away = mkts[1].get("title", "Team B")
-
-        if home_ticker and away_ticker:
-            events.append({
-                "event_ticker": event_ticker,
-                "home":         home or "Home",
-                "away":         away or "Away",
-                "home_ticker":  home_ticker,
-                "away_ticker":  away_ticker,
-                "home_yes":     home_yes or 0.5,
-                "away_yes":     away_yes or 0.5,
-                "commence":     commence,
-            })
+        events.append({
+            "event_ticker": event_ticker,
+            "home":         home_name,
+            "away":         away_name,
+            "home_ticker":  home_ticker,
+            "away_ticker":  away_ticker,
+            "home_yes":     _yes_price(home_mkt),
+            "away_yes":     _yes_price(away_mkt),
+            "commence":     commence,
+        })
 
     return events
 
