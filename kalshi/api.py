@@ -86,13 +86,33 @@ def get_event(event_ticker: str) -> dict:
 
 def get_markets_for_series(series_ticker: str, status: str = "open",
                            limit: int = 200) -> list[dict]:
-    """Return all markets for a series filtered by status."""
-    data = _get("/markets", params={
-        "series_ticker": series_ticker,
-        "status": status,
-        "limit": limit,
-    })
-    return data.get("markets", [])
+    """Return all markets for a series filtered by status, paginating through all results."""
+    all_markets = []
+    cursor = None
+    page_size = 200  # max per request
+
+    while True:
+        params = {
+            "series_ticker": series_ticker,
+            "status": status,
+            "limit": page_size,
+        }
+        if cursor:
+            params["cursor"] = cursor
+
+        data = _get("/markets", params=params)
+        markets = data.get("markets", [])
+        all_markets.extend(markets)
+
+        cursor = data.get("cursor")
+        if not cursor or len(markets) < page_size:
+            break  # no more pages
+
+        # Stop early if we've exceeded the requested limit
+        if limit and len(all_markets) >= limit:
+            break
+
+    return all_markets
 
 
 def get_market(ticker: str) -> dict:
@@ -167,7 +187,7 @@ def place_order(ticker: str, side: str, count: int,
 
 # ── Historical (backtest) ─────────────────────────────────────────────────────
 
-def get_settled_markets(series_ticker: str, limit: int = 300) -> list[dict]:
+def get_settled_markets(series_ticker: str, limit: int = 500) -> list[dict]:
     """Return settled markets for a series (all brackets, all past days)."""
     return get_markets_for_series(series_ticker, status="settled", limit=limit)
 

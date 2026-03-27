@@ -22,8 +22,14 @@ env/
 *.p8
 kalshi_private_key*
 
-# Bot runtime data (optional: you may want to track trade_log.csv)
+# Bot runtime data
 data/daily_lock.json
+data/bot.log
+data/dashboard.log
+flask_server.log
+
+# Claude
+.claude/
 
 # IDE / OS
 .idea/

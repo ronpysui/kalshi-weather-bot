@@ -33,7 +33,7 @@ SIGMA_AFTERNOON  = 1.5   # 2 PM – 5 PM
 SIGMA_EVENING    = 1.0   # after 5 PM
 
 # ── Backtest ──────────────────────────────────────────────────────────────────
-BACKTEST_DAYS           = 30
+BACKTEST_DAYS           = 366
 BACKTEST_SIMULATIONS    = 500   # Monte Carlo runs per day
 BACKTEST_FORECAST_SIGMA = 2.5   # simulated NWS forecast error (°F)
 

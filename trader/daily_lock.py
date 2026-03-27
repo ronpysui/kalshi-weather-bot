@@ -1,24 +1,31 @@
 """
-Daily bet lock.
+Daily prediction lock + opportunistic bet tracker.
 
-Ensures bets are placed exactly ONCE per day at BET_HOUR_ET (default 7 AM ET).
-After the morning bet window, the bot monitors only — no new orders.
+Philosophy
+----------
+- Prediction (forecast + sigma) is locked ONCE at market open (6 AM ET).
+- Bets are placed OPPORTUNISTICALLY throughout the day — the moment a
+  bracket's edge clears the threshold, the order fires immediately.
+- Each bracket ticker can only be bet ONCE per day (no doubling up).
+- The bot keeps scanning after placing bets — new opportunities can arise
+  in other brackets as Kalshi prices shift.
 
 Lock file format (data/daily_lock.json):
 {
-    "date": "2026-03-26",
-    "locked_at": "2026-03-26T07:03:12",
-    "forecast": 72.0,
-    "sigma": 3.0,
+    "date":        "2026-03-26",
+    "locked_at":   "2026-03-26T06:00:00",
+    "forecast":    75.0,
+    "sigma":       3.0,
+    "bets_placed": true,          // true if at least one bet placed today
     "bets": [
         {
-            "ticker":    "KXHIGHNY-26MAR26-T72",
-            "side":      "no",
-            "contracts": 12,
-            "price":     21,
-            "edge":      39.9,
-            "our_prob":  59.9,
-            "label":     "73° or above"
+            "ticker":    "KXHIGHNY-26MAR26-T73",
+            "side":      "yes",
+            "contracts": 24,
+            "price":     1,
+            "edge":      95.7,
+            "our_prob":  96.7,
+            "label":     "70° or above"
         },
         ...
     ]
@@ -27,7 +34,7 @@ Lock file format (data/daily_lock.json):
 
 import json
 import os
-from datetime import datetime, date
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import config
@@ -55,96 +62,117 @@ def today_str() -> str:
     return datetime.now(ET).date().isoformat()
 
 
+# ── Prediction lock ────────────────────────────────────────────────────────────
+
 def is_prediction_locked() -> bool:
-    """Return True if today's prediction (forecast + sigma) has been fixed."""
-    lock = _load()
-    return lock.get("date") == today_str()
+    """Return True if today's forecast + sigma have been locked."""
+    return _load().get("date") == today_str()
 
 
 def is_locked() -> bool:
-    """Alias for is_prediction_locked() — kept for backward compatibility."""
+    """Alias for is_prediction_locked() — backward compat."""
     return is_prediction_locked()
 
 
-def bets_are_placed() -> bool:
-    """Return True if orders have already been placed today."""
-    lock = _load()
-    return lock.get("date") == today_str() and lock.get("bets_placed", False)
-
-
 def get_lock() -> dict | None:
-    """Return today's lock data, or None if not yet locked."""
+    """Return today's lock dict, or None if not yet locked."""
     lock = _load()
-    if lock.get("date") == today_str():
-        return lock
-    return None
-
-
-def in_bet_window() -> bool:
-    """
-    Return True if we're currently in the morning bet window.
-    Window: BET_HOUR_ET ≤ hour < BET_HOUR_ET + 1  (one-hour window).
-    """
-    hour = datetime.now(ET).hour
-    return hour == config.BET_HOUR_ET
-
-
-def should_bet() -> bool:
-    """Return True if we should place orders right now (in window AND bets not yet placed)."""
-    return in_bet_window() and not bets_are_placed()
+    return lock if lock.get("date") == today_str() else None
 
 
 def lock_prediction(forecast: float, sigma: float):
     """
-    Lock today's prediction immediately on first daily fetch.
-    This fixes the forecast + sigma for the whole day regardless of bet window.
-    Orders are placed separately at BET_HOUR_ET via update_bets().
+    Lock forecast + sigma at market open.
+    Stamps locked_at as MARKET_OPEN_HOUR_ET to reflect opening prediction.
+    No-op if already locked today.
     """
     if is_prediction_locked():
-        return  # already locked — don't overwrite
+        return
     now_et = datetime.now(ET)
-    data = {
+    open_time = now_et.replace(
+        hour=config.MARKET_OPEN_HOUR_ET, minute=0, second=0, microsecond=0
+    )
+    _save({
         "date":        today_str(),
-        "locked_at":   now_et.strftime("%Y-%m-%dT%H:%M:%S"),
+        "locked_at":   open_time.strftime("%Y-%m-%dT%H:%M:%S"),
         "forecast":    forecast,
         "sigma":       sigma,
         "bets_placed": False,
         "bets":        [],
-    }
-    _save(data)
+    })
 
 
-def update_bets(bets: list[dict]):
+# ── Opportunistic bet tracker ──────────────────────────────────────────────────
+
+def already_bet(ticker: str) -> bool:
+    """Return True if this bracket ticker has already been bet today."""
+    lock = get_lock()
+    if not lock:
+        return False
+    return any(b["ticker"] == ticker for b in lock.get("bets", []))
+
+
+def record_bet(bet: dict):
     """
-    Record placed orders into today's existing lock file.
-    Call this after orders fire at BET_HOUR_ET.
+    Add a single placed bet to today's lock file.
+    Call this immediately after each order fires.
+
+    bet = {ticker, side, contracts, price, edge, our_prob, label}
     """
     data = _load()
     if data.get("date") != today_str():
-        return  # no prediction lock for today — shouldn't happen
+        return  # no lock yet — shouldn't happen
+    data.setdefault("bets", []).append(bet)
+    data["bets_placed"] = True
+    _save(data)
+
+
+def bets_are_placed() -> bool:
+    """Return True if at least one bet has been placed today."""
+    lock = get_lock()
+    return bool(lock and lock.get("bets_placed", False))
+
+
+# ── Legacy helpers (kept for backward compat) ──────────────────────────────────
+
+def in_bet_window() -> bool:
+    """Market is open and we're past market open hour."""
+    hour = datetime.now(ET).hour
+    return config.MARKET_OPEN_HOUR_ET <= hour < config.MARKET_CLOSE_HOUR_ET
+
+
+def should_bet() -> bool:
+    """
+    Legacy: returns True if in market hours.
+    Main.py now uses already_bet(ticker) per-signal instead.
+    """
+    return in_bet_window()
+
+
+def update_bets(bets: list[dict]):
+    """Legacy batch update — kept for backward compat."""
+    data = _load()
+    if data.get("date") != today_str():
+        return
     data["bets_placed"] = True
     data["bets"]        = bets
     _save(data)
 
 
 def lock(forecast: float, sigma: float, bets: list[dict]):
-    """
-    Legacy one-shot lock (prediction + bets in one call).
-    Kept for backward compatibility with main.py standalone mode.
-    """
+    """Legacy one-shot lock — kept for backward compat."""
     now_et = datetime.now(ET)
-    data = {
+    _save({
         "date":        today_str(),
         "locked_at":   now_et.strftime("%Y-%m-%dT%H:%M:%S"),
         "forecast":    forecast,
         "sigma":       sigma,
-        "bets_placed": True,
+        "bets_placed": bool(bets),
         "bets":        bets,
-    }
-    _save(data)
+    })
 
 
 def unlock_for_testing():
-    """Remove today's lock — use for development/testing only."""
+    """Remove today's lock — dev/testing only."""
     if os.path.exists(config.DAILY_LOCK_PATH):
         os.remove(config.DAILY_LOCK_PATH)

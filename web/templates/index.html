@@ -359,6 +359,73 @@
     .side-yes { color: var(--green); font-weight: 700; }
     .side-no  { color: var(--red);   font-weight: 700; }
 
+    .sig-row-winning { background: rgba(0, 255, 136, 0.07); border-left: 2px solid var(--green); }
+    .sig-row-losing  { background: rgba(255, 59,  59,  0.07); border-left: 2px solid var(--red); }
+    .sig-row-neutral { border-left: 2px solid #444; }
+    .sig-row-winning:hover { background: rgba(0, 255, 136, 0.14); }
+    .sig-row-losing:hover  { background: rgba(255, 59,  59,  0.14); }
+
+    /* ── Forecast hero ──────────────────────────────────────────────────────── */
+    .forecast-hero {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 24px 28px;
+      display: flex;
+      align-items: center;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+    .fh-loading { color: var(--text-dim); font-size: 13px; }
+    .fh-main { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
+    .fh-label { font-size: 10px; letter-spacing: 0.12em; color: var(--text-dim); text-transform: uppercase; }
+    .fh-temp  { font-size: 56px; font-weight: 700; color: var(--cyan); line-height: 1; }
+    .fh-sigma { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+    .fh-divider { width: 1px; height: 70px; background: var(--border); }
+    .fh-stat  { display: flex; flex-direction: column; gap: 4px; }
+    .fh-stat-val  { font-size: 24px; font-weight: 700; }
+    .fh-stat-sub  { font-size: 11px; color: var(--text-dim); }
+    .fh-lock  { margin-left: auto; font-size: 11px; color: var(--text-dim); text-align: right; line-height: 1.8; }
+    .fh-lock strong { color: var(--green); font-weight: 600; }
+
+    /* ── Bracket prob bar ───────────────────────────────────────────────────── */
+    .prob-bar-wrap { background: rgba(255,255,255,0.05); border-radius: 2px; height: 8px; width: 100%; }
+    .prob-bar      { height: 8px; border-radius: 2px; background: var(--cyan); transition: width 0.4s ease; }
+    .prob-bar.top  { background: var(--green); }
+    tr.bracket-top { background: rgba(0,255,136,0.05); }
+
+    /* ── Backtest W/L hero ──────────────────────────────────────────────────── */
+    .bt-wl-hero {
+      display: flex; align-items: center; gap: 40px; flex-wrap: wrap;
+      background: var(--panel-bg); border: 1px solid var(--border);
+      border-radius: 4px; padding: 24px 28px;
+    }
+    .bt-wl-stat { display: flex; flex-direction: column; gap: 4px; }
+    .bt-wl-label { font-size: 10px; letter-spacing: 0.12em; color: var(--text-dim); text-transform: uppercase; }
+    .bt-wl-val   { font-size: 48px; font-weight: 700; line-height: 1; }
+    .bt-wl-sub   { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+    .bt-wl-divider { width: 1px; height: 60px; background: var(--border); }
+    .bt-wl-note { margin-left: auto; font-size: 11px; color: var(--text-dim); line-height: 1.8; max-width: 280px; }
+
+    /* ── Backtest table rows ────────────────────────────────────────────────── */
+    .bt-row-win  { border-left: 2px solid var(--green); }
+    .bt-row-loss { border-left: 2px solid var(--red); }
+    .bt-row-win:hover  { background: rgba(0,255,136,0.05); cursor:pointer; }
+    .bt-row-loss:hover { background: rgba(255,59,59,0.05);  cursor:pointer; }
+    .bt-expand { background: var(--panel-bg); }
+    .bt-expand td { padding: 12px 16px !important; }
+    .bt-bracket-grid {
+      display: flex; flex-direction: column; gap: 6px;
+      max-width: 500px;
+    }
+    .bt-bracket-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+    .bt-bracket-label { width: 110px; flex-shrink: 0; }
+    .bt-bracket-pct { width: 44px; text-align: right; flex-shrink: 0; font-weight: 600; }
+    .bt-bracket-bar-wrap { flex: 1; background: rgba(255,255,255,0.05); border-radius: 2px; height: 6px; }
+    .bt-bracket-bar { height: 6px; border-radius: 2px; }
+    .bt-badge-win  { display:inline-block; padding:2px 8px; border-radius:2px; background:rgba(0,255,136,0.15); color:var(--green); font-size:11px; font-weight:700; letter-spacing:.08em; }
+    .bt-badge-loss { display:inline-block; padding:2px 8px; border-radius:2px; background:rgba(255,59,59,0.15);  color:var(--red);   font-size:11px; font-weight:700; letter-spacing:.08em; }
+
     /* ── Forecast bar ──────────────────────────────────────────────────────── */
     .forecast-bar {
       display: flex;
@@ -759,94 +826,57 @@
       </div>
     </div>
 
-    <!-- ── TODAY'S BETS ──────────────────────────────────────────────────── -->
-    <div class="bets-box">
-      <div class="bets-header">
-        <div class="bets-title">// today's bets</div>
-        <div class="bankroll-control">
-          <span>bankroll</span>
-          <span style="color:var(--text-bright)">$</span>
-          <input
-            class="bankroll-input"
-            id="bankroll-input"
-            type="number"
-            min="1"
-            step="10"
-            value="100"
-            oninput="onBankrollChange(this.value)"
-          />
-        </div>
+    <!-- ── FORECAST HERO ───────────────────────────────────────────────── -->
+    <div class="forecast-hero" id="forecast-hero">
+      <div class="fh-loading"><span class="spinner"></span> fetching forecast...</div>
+    </div>
+
+    <!-- ── BRACKET PROBABILITIES ──────────────────────────────────────── -->
+    <div class="panel" style="margin-top:16px;">
+      <div class="panel-header">
+        <div class="panel-title">bracket probabilities</div>
+        <div class="panel-meta" id="bracket-meta">based on morning forecast</div>
       </div>
-      <div id="bets-body" class="bets-body">
-        <div class="no-bets-box">
-          <span class="spinner"></span> loading recommendations...
-        </div>
+      <div class="table-wrap">
+        <table id="bracket-table">
+          <thead>
+            <tr>
+              <th>Bracket</th>
+              <th>Probability</th>
+              <th style="width:40%"></th>
+              <th>Kalshi Price</th>
+            </tr>
+          </thead>
+          <tbody id="bracket-tbody">
+            <tr><td colspan="4" class="loading-overlay"><span class="spinner"></span>loading...</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
-    <!-- ── STAT CARDS ────────────────────────────────────────────────────── -->
-    <div id="live-cards" class="cards" style="margin-bottom:16px;">
-      <div class="card" style="--accent:var(--cyan)">
-        <div class="card-label">NWS Forecast</div>
-        <div class="card-value cyan" id="card-forecast">--.-F</div>
-        <div class="card-sub" id="card-sigma">sigma: --</div>
+    <!-- ── TODAY'S SIGNALS ────────────────────────────────────────────── -->
+    <div class="panel" style="margin-top:16px;" id="signals-panel">
+      <div class="panel-header">
+        <div class="panel-title">today's signals</div>
+        <div class="panel-meta dim" id="signals-meta">forecast-aligned · fires when edge > 7c</div>
       </div>
-      <div class="card" style="--accent:var(--green)">
-        <div class="card-label">Bankroll</div>
-        <div class="card-value green" id="card-bankroll">$--</div>
-        <div class="card-sub" id="card-minedge">min edge: --c</div>
-      </div>
-      <div class="card" style="--accent:var(--purple)">
-        <div class="card-label">Signals</div>
-        <div class="card-value purple" id="card-signals">--</div>
-        <div class="card-sub">actionable trades</div>
-      </div>
-      <div class="card" style="--accent:var(--yellow)">
-        <div class="card-label">Status</div>
-        <div class="card-value" style="font-size:14px;margin-top:4px;" id="card-status">
-          <span class="status-dot dot-yellow"></span>loading
-        </div>
-        <div class="card-sub" id="card-markets">-- markets</div>
+      <div id="signals-body">
+        <div class="loading-overlay"><span class="spinner"></span>loading...</div>
       </div>
     </div>
 
-    <div class="grid-2">
-      <!-- Bracket table -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">bracket probabilities</div>
-          <div class="panel-meta">our model vs kalshi market</div>
-        </div>
-        <div class="table-wrap">
-          <table id="bracket-table">
-            <thead>
-              <tr>
-                <th>Bracket</th>
-                <th>Our Prob</th>
-                <th>Mkt Yes</th>
-                <th>Mkt No</th>
-                <th>Yes Edge</th>
-                <th>No Edge</th>
-              </tr>
-            </thead>
-            <tbody id="bracket-tbody">
-              <tr><td colspan="6" class="loading-overlay"><span class="spinner"></span>loading market data...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Signals table -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">signals</div>
-          <div class="panel-meta" id="signals-threshold">edge &gt; 7c</div>
-        </div>
-        <div id="signals-container">
-          <div class="loading-overlay"><span class="spinner"></span>computing signals...</div>
-        </div>
-      </div>
-    </div>
+    <!-- hidden inputs kept for JS compat -->
+    <input type="hidden" id="bankroll-input" value="100">
+    <div style="display:none" id="bets-body"></div>
+    <div style="display:none" id="signals-container"></div>
+    <div style="display:none" id="card-forecast"></div>
+    <div style="display:none" id="card-sigma"></div>
+    <div style="display:none" id="card-current-temp"></div>
+    <div style="display:none" id="card-bankroll"></div>
+    <div style="display:none" id="card-minedge"></div>
+    <div style="display:none" id="card-signals"></div>
+    <div style="display:none" id="card-status"></div>
+    <div style="display:none" id="card-markets"></div>
 
   </div>
 
@@ -856,74 +886,41 @@
     <div class="section-header">
       <div class="section-title">30-day backtest</div>
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="dim" style="font-size:11px;">vs seasonal climatology baseline</span>
+        <span class="dim" style="font-size:11px;">forecast accuracy · open-meteo historical forecast vs actual kalshi outcome</span>
         <button class="btn" id="btn-refresh-bt" onclick="refreshBacktest()">↺ re-run</button>
       </div>
     </div>
 
     <div id="bt-loading" class="loading-overlay">
-      <span class="spinner"></span>running backtest — fetching 30 days from kalshi...
+      <span class="spinner"></span>fetching 30 days from kalshi...
     </div>
 
     <div id="bt-content" style="display:none">
 
-      <!-- Summary cards -->
-      <div class="cards" id="bt-cards"></div>
-
-      <div class="grid-2">
-        <!-- Cumulative P&L chart -->
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title">cumulative P&L</div>
-            <div class="panel-meta">30-day simulation</div>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="pnl-chart"></canvas>
-          </div>
-        </div>
-
-        <!-- Daily P&L chart -->
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title">daily P&L</div>
-            <div class="panel-meta">per-day breakdown</div>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="daily-chart"></canvas>
-          </div>
-        </div>
-      </div>
+      <!-- W/L Summary -->
+      <div class="bt-wl-hero" id="bt-wl-hero"></div>
 
       <!-- Day-by-day table -->
-      <div class="panel">
+      <div class="panel" style="margin-top:16px;">
         <div class="panel-header">
           <div class="panel-title">day-by-day results</div>
-          <div class="panel-meta">oldest → newest</div>
+          <div class="panel-meta dim" style="font-size:11px;">click any row to see bracket probabilities</div>
         </div>
         <div class="table-wrap">
-          <table>
+          <table id="bt-table">
             <thead>
               <tr>
+                <th></th>
                 <th>Date</th>
-                <th>Actual</th>
-                <th>Sim Fcst</th>
-                <th>Seasonal</th>
-                <th>Correct Bracket</th>
-                <th>Mdl P(win)</th>
-                <th>Bets</th>
-                <th>W/L/NB</th>
-                <th>Day P&L</th>
-                <th>Cumul P&L</th>
+                <th>Actual High</th>
+                <th>Forecast Used</th>
+                <th>Model's Pick</th>
+                <th>Actual Bracket</th>
+                <th>Result</th>
               </tr>
             </thead>
             <tbody id="bt-tbody"></tbody>
           </table>
-        </div>
-        <div class="tooltip" style="color:var(--yellow);font-style:normal;">
-          [!] METHODOLOGY — Sim Fcst = actual_high + noise (NOT a real historical NWS forecast).
-          Market price = seasonal climatology (NOT real Kalshi opening prices).
-          Fixed sigma=3F on every day, same as live morning lock.
-          Results show upper bound on model quality — real live returns will be smaller.
         </div>
       </div>
 
@@ -946,12 +943,25 @@
 </main>
 
 <script>
-// ── Clock ──────────────────────────────────────────────────────────────────
+// ── Clock + Market Open Countdown ──────────────────────────────────────────
 function updateClock() {
   const now = new Date();
-  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  document.getElementById('clock').textContent =
-    et.toTimeString().slice(0, 8);
+  const et  = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  document.getElementById('clock').textContent = et.toTimeString().slice(0, 8);
+
+  // Time to next 6 AM ET
+  const cd = document.getElementById('market-open-countdown');
+  if (cd) {
+    const next6am = new Date(et);
+    next6am.setHours(6, 0, 0, 0);
+    if (et >= next6am) next6am.setDate(next6am.getDate() + 1); // already past, use tomorrow
+    const diffMs  = next6am - et;
+    const diffSec = Math.floor(diffMs / 1000);
+    const h = String(Math.floor(diffSec / 3600)).padStart(2, '0');
+    const m = String(Math.floor((diffSec % 3600) / 60)).padStart(2, '0');
+    const s = String(diffSec % 60).padStart(2, '0');
+    cd.textContent = `${h}:${m}:${s}`;
+  }
 }
 setInterval(updateClock, 1000);
 updateClock();
@@ -1099,13 +1109,9 @@ function renderBetsBox(d, bankroll) {
   const ch = String(Math.floor(d.secs_to_bet/3600)).padStart(2,'0');
   const cm = String(Math.floor((d.secs_to_bet%3600)/60)).padStart(2,'0');
   const cs = String(d.secs_to_bet%60).padStart(2,'0');
-  const betNote = !d.bets_placed
-    ? `<div style="width:100%;padding:6px 2px;font-size:11px;color:var(--text-dim);">
-         ⏱ Orders auto-fire at <span style="color:var(--cyan)">${d.bet_hour_et}:00 AM ET</span>
-         &nbsp;—&nbsp; <span id="next-bet-countdown" style="color:var(--cyan);font-weight:600;">${ch}:${cm}:${cs}</span>
-         &nbsp;|&nbsp; <span style="color:var(--text-dim)">place manually below or wait for auto-fire</span>
-       </div>`
-    : '';
+  const betNote = `<div style="width:100%;padding:6px 2px;font-size:11px;color:var(--text-dim);">
+      &#9654; Bot scans every 30 min and fires each bet the moment edge clears ${(d.min_edge*100).toFixed(0)}¢ &nbsp;·&nbsp; each bracket bet only once per day
+    </div>`;
 
   const cards = d.signals.map((s, i) => {
     const contracts  = kellyContracts(s.our_prob, s.mkt_price, bankroll);
@@ -1177,109 +1183,170 @@ async function loadLive() {
     const d = await res.json();
     if (d.error) { renderLiveError(d.error); return; }
     renderLive(d);
-    ['card-forecast','card-bankroll','card-signals'].forEach(flashEl);
+    ['card-forecast','card-current-temp','card-bankroll','card-signals'].forEach(flashEl);
   } catch(e) {
     renderLiveError(e.message);
   }
 }
 
 function renderLive(d) {
-  _liveData = d;   // cache for bankroll recalc
-  _bankroll = parseFloat(document.getElementById('bankroll-input')?.value) || d.bankroll;
-
-  // Bets box
-  renderBetsBox(d, _bankroll);
+  _liveData = d;
 
   // Mode tag
   const tag = document.getElementById('mode-tag');
   tag.textContent = d.dry_run ? 'DRY RUN' : 'LIVE';
   tag.className = 'tag ' + (d.dry_run ? 'tag-dry' : 'tag-live');
 
-  // Cards
-  document.getElementById('card-forecast').textContent = d.forecast + 'F';
-  document.getElementById('card-sigma').textContent = 'sigma: ' + d.sigma + 'F';
-  document.getElementById('card-bankroll').textContent = '$' + d.bankroll.toFixed(2);
-  document.getElementById('card-minedge').textContent = 'min edge: ' + (d.min_edge * 100).toFixed(0) + 'c';
-  document.getElementById('card-signals').textContent = d.signals.length;
-  document.getElementById('card-markets').textContent = d.brackets.length + ' brackets';
-  document.getElementById('signals-threshold').textContent = 'edge > ' + (d.min_edge * 100).toFixed(0) + 'c';
-
-  const statusEl = document.getElementById('card-status');
-  if (d.signals.length > 0) {
-    statusEl.innerHTML = '<span class="status-dot dot-green"></span>signals found';
-  } else {
-    statusEl.innerHTML = '<span class="status-dot dot-yellow"></span>monitoring';
-  }
-
   document.getElementById('live-ts').textContent = d.timestamp;
 
-  // Bracket table
-  // Find the bracket with highest our_prob
+  // ── Forecast hero ──────────────────────────────────────────────────────────
+  const lk = d.lock;
+  const lockedAt = lk ? lk.locked_at.replace('T',' ').substring(0,16) + ' ET' : null;
+  const nowTemp  = d.current_temp != null ? `${d.current_temp}°F` : '--';
+  const hero = document.getElementById('forecast-hero');
+  hero.innerHTML = `
+    <div class="fh-main">
+      <div class="fh-label">NWS Predicted High · Today</div>
+      <div class="fh-temp">${d.forecast}°F</div>
+      <div class="fh-sigma">uncertainty ±${d.sigma}°F</div>
+    </div>
+    <div class="fh-divider"></div>
+    <div class="fh-stat">
+      <div class="fh-label">NYC Now</div>
+      <div class="fh-stat-val" style="color:#ff9900">${nowTemp}</div>
+      <div class="fh-stat-sub">live observed</div>
+    </div>
+    <div class="fh-divider"></div>
+    <div class="fh-stat">
+      <div class="fh-label">Brackets</div>
+      <div class="fh-stat-val cyan">${d.brackets.length}</div>
+      <div class="fh-stat-sub">open on Kalshi</div>
+    </div>
+    ${lockedAt ? `<div class="fh-lock">forecast locked<br><strong>${lockedAt}</strong><br><span>fixed for today</span></div>` : ''}
+    <div class="fh-divider"></div>
+    <div class="fh-stat">
+      <div class="fh-label">Next Market Open</div>
+      <div class="fh-stat-val" id="market-open-countdown" style="color:var(--cyan);font-size:1.3rem;letter-spacing:.05em;">--:--:--</div>
+      <div class="fh-stat-sub">6:00 AM ET</div>
+    </div>
+  `;
+
+  // ── Bracket probability table ──────────────────────────────────────────────
   const maxProb = Math.max(...d.brackets.map(b => b.our_prob));
+  document.getElementById('bracket-meta').textContent =
+    `based on N(${d.forecast}°F, σ=${d.sigma}°F) · morning forecast`;
+
+  // ── Signals panel ──────────────────────────────────────────────────────────
+  renderSignals(d);
 
   const tbody = document.getElementById('bracket-tbody');
   tbody.innerHTML = d.brackets.map(b => {
     const isTop = b.our_prob === maxProb;
-    const rowStyle = isTop ? 'background:rgba(0,212,255,0.04);' : '';
+    const barColor = isTop ? 'var(--green)' : 'var(--cyan)';
+    const rowCls   = isTop ? 'bracket-top' : '';
+    // Kalshi YES price — what the market thinks the prob is
+    const mktProb  = b.mkt_yes;
     return `
-    <tr style="${rowStyle}">
-      <td style="${isTop ? 'color:var(--cyan);font-weight:600' : ''}">${b.label}${isTop ? ' &lt;--' : ''}</td>
+    <tr class="${rowCls}">
+      <td style="${isTop ? 'color:var(--green);font-weight:700' : ''}">${b.label}${isTop ? ' ←' : ''}</td>
+      <td style="font-weight:700;color:${isTop ? 'var(--green)' : 'var(--cyan)'};width:70px">${b.our_prob}%</td>
       <td>
-        <div class="prob-cell">
-          <span class="${isTop ? 'cyan' : 'dim'}" style="font-weight:${isTop?'600':'400'}">${b.our_prob}%</span>
-          <div class="prob-bar-wrap">
-            <div class="prob-bar" style="width:${Math.min(b.our_prob,100)}%;${isTop?'background:var(--cyan)':''}"></div>
-          </div>
+        <div class="prob-bar-wrap">
+          <div class="prob-bar" style="width:${Math.min(b.our_prob, 100)}%;background:${barColor}"></div>
         </div>
       </td>
-      <td class="dim">${b.mkt_yes}c</td>
-      <td class="dim">${b.mkt_no}c</td>
-      <td><span class="edge-pill ${edgeClass(b.yes_edge)}">${fmt.edge(b.yes_edge)}</span></td>
-      <td><span class="edge-pill ${edgeClass(b.no_edge)}">${fmt.edge(b.no_edge)}</span></td>
-    </tr>`
+      <td class="dim" style="width:100px;text-align:right">${mktProb}c market</td>
+    </tr>`;
   }).join('');
-
-  // Signals
-  const sigContainer = document.getElementById('signals-container');
-  if (d.signals.length === 0) {
-    sigContainer.innerHTML = `<div class="no-signals">
-      no actionable signals<br>
-      <span>edge threshold not met on any bracket</span>
-    </div>`;
-  } else {
-    sigContainer.innerHTML = `
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Bracket</th><th>Side</th><th>Our Prob</th>
-              <th>Mkt Price</th><th>Edge</th><th>EV/$</th>
-              <th>Contracts</th><th>Risk</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${d.signals.map(s => `
-              <tr>
-                <td>${s.label}</td>
-                <td class="side-${s.side}">${s.side.toUpperCase()}</td>
-                <td class="cyan">${s.our_prob}%</td>
-                <td class="dim">${s.mkt_price}c</td>
-                <td><span class="edge-pill ${edgeClass(s.edge)}">${fmt.edge(s.edge)}</span></td>
-                <td class="green">+${s.ev}c</td>
-                <td class="${colorClass(s.contracts)}">${s.contracts}</td>
-                <td class="dim">$${s.risk.toFixed(2)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>`;
-  }
 }
 
 function renderLiveError(msg) {
+  document.getElementById('forecast-hero').innerHTML =
+    `<div class="fh-loading" style="color:var(--red)">${msg}</div>`;
   document.getElementById('bracket-tbody').innerHTML =
-    `<tr><td colspan="6" style="padding:24px;color:var(--red);text-align:center">${msg}</td></tr>`;
+    `<tr><td colspan="4" style="padding:24px;color:var(--red);text-align:center">${msg}</td></tr>`;
 }
+
+// ── Signals renderer ───────────────────────────────────────────────────────
+function renderSignals(d) {
+  const el  = document.getElementById('signals-body');
+  const meta = document.getElementById('signals-meta');
+  const sigs = d.signals || [];
+  const lk   = d.lock;
+
+  // Lock banner
+  let lockBanner = '';
+  if (lk) {
+    const t = lk.locked_at ? lk.locked_at.slice(11,16) : '--:--';
+    lockBanner = `<div style="margin-bottom:12px;padding:7px 12px;background:rgba(0,255,136,0.05);
+                  border:1px solid rgba(0,255,136,0.15);border-radius:5px;font-size:11px;display:flex;gap:14px;align-items:center;">
+      <span style="color:var(--green);font-weight:700;letter-spacing:.07em;">&#128274; PREDICTION LOCKED ${t} ET</span>
+      <span class="dim">forecast: <span style="color:var(--cyan)">${lk.forecast}°F</span> &nbsp;·&nbsp; &sigma; = ${lk.sigma}°F &nbsp;·&nbsp; fixed for today</span>
+    </div>`;
+  }
+
+  // No signals
+  if (sigs.length === 0) {
+    meta.textContent = 'no edge opportunities right now';
+    el.innerHTML = lockBanner + `<div style="padding:28px;color:var(--text-dim);text-align:center;">
+      No bracket clears the ${(d.min_edge*100).toFixed(0)}¢ edge threshold — Kalshi is fairly priced today.
+    </div>`;
+    return;
+  }
+
+  meta.textContent = `${sigs.length} forecast-aligned signal${sigs.length>1?'s':''} · edge > ${(d.min_edge*100).toFixed(0)}¢`;
+
+  // Bets placed banner
+  if (d.bets_placed && lk && lk.bets && lk.bets.length > 0) {
+    const placed = lk.bets.map((b,i) => `
+      <div class="bet-card" style="border-color:rgba(0,255,136,0.3);">
+        <div class="bet-rank">#${i+1}</div>
+        <div class="bet-side ${b.side}">${b.side.toUpperCase()}</div>
+        <div class="bet-bracket">${b.label}</div>
+        <div class="bet-amount ${b.side}">$${(b.contracts * b.price/100).toFixed(2)}</div>
+        <div class="bet-detail">${b.contracts} contract${b.contracts!==1?'s':''} @ ${b.price}c</div>
+        <div class="bet-meta">
+          <span class="bet-tag bet-tag-edge">edge +${b.edge}c</span>
+          <span class="bet-tag bet-tag-prob">${b.our_prob}% prob</span>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--green);">&#10003; order placed</div>
+      </div>`).join('');
+    el.innerHTML = lockBanner + `<div style="display:flex;gap:12px;flex-wrap:wrap;">${placed}</div>`;
+    return;
+  }
+
+  // Signal cards
+  const cards = sigs.map((s, i) => {
+    const bankroll   = parseFloat(document.getElementById('bankroll-input').value) || 100;
+    const contracts  = kellyContracts(s.our_prob, s.mkt_price, bankroll);
+    const riskUSD    = (contracts * s.mkt_price / 100).toFixed(2);
+    const winUSD     = (contracts * (100 - s.mkt_price) / 100).toFixed(2);
+    const dryBadge   = d.dry_run ? '<span class="dry-badge">DRY</span>' : '';
+    const btnId      = `sig-btn-${i}`;
+    const edgeCls    = s.edge >= 20 ? 'edge-high' : s.edge >= 10 ? 'edge-med' : 'edge-low';
+    return `
+      <div class="bet-card">
+        <div class="bet-rank">#${i+1}</div>
+        <div class="bet-side ${s.side}">${s.side.toUpperCase()}</div>
+        <div class="bet-bracket">${s.label}</div>
+        <div class="bet-amount ${s.side}">$${riskUSD}</div>
+        <div class="bet-detail">${contracts} contract${contracts!==1?'s':''} @ ${s.mkt_price}c &nbsp;|&nbsp; to win $${winUSD}</div>
+        <div class="bet-meta">
+          <span class="bet-tag bet-tag-edge ${edgeCls}">edge +${s.edge}c</span>
+          <span class="bet-tag bet-tag-ev">EV +${s.ev}c</span>
+          <span class="bet-tag bet-tag-prob">${s.our_prob}% prob</span>
+        </div>
+        <button id="${btnId}" class="lock-btn ${s.side}"
+          onclick="lockIn('${s.ticker}','${s.side}',${contracts},${s.mkt_price},'${btnId}')"
+          ${contracts <= 0 ? 'disabled' : ''}>
+          &#9632; place bet ${dryBadge}
+        </button>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = lockBanner + `<div style="display:flex;gap:12px;flex-wrap:wrap;">${cards}</div>`;
+}
+
 
 async function refreshLive() {
   const btn = document.getElementById('btn-refresh-live');
@@ -1293,8 +1360,6 @@ async function refreshLive() {
 }
 
 // ── Backtest ───────────────────────────────────────────────────────────────
-let _pnlChart = null, _dailyChart = null;
-
 async function loadBacktest() {
   document.getElementById('bt-loading').style.display = 'block';
   document.getElementById('bt-content').style.display = 'none';
@@ -1314,147 +1379,92 @@ async function loadBacktest() {
 
 function renderBacktest(d) {
   const s = d.summary;
+  const wrColor = s.win_rate >= 50 ? 'var(--green)' : s.win_rate >= 35 ? 'var(--yellow)' : 'var(--red)';
 
-  // Cards
-  const pnlColor = s.total_pnl >= 0 ? 'green' : 'red';
-  const roiColor = s.roi >= 0 ? 'green' : 'red';
-  const shrpColor = s.sharpe >= 1 ? 'green' : s.sharpe >= 0 ? 'yellow' : 'red';
-  const accColor = s.accuracy >= 50 ? 'green' : 'yellow';
-
-  document.getElementById('bt-cards').innerHTML = `
-    <div class="card" style="--accent:var(--${pnlColor})">
-      <div class="card-label">Total P&L</div>
-      <div class="card-value ${pnlColor}">${fmt.dollar(s.total_pnl)}</div>
-      <div class="card-sub">avg ${fmt.dollar(s.avg_daily)}/day</div>
+  // W/L hero
+  document.getElementById('bt-wl-hero').innerHTML = `
+    <div class="bt-wl-stat">
+      <div class="bt-wl-label">Win Rate</div>
+      <div class="bt-wl-val" style="color:${wrColor}">${s.win_rate}%</div>
+      <div class="bt-wl-sub">${s.wins}W · ${s.losses}L · ${s.total_days} days</div>
     </div>
-    <div class="card" style="--accent:var(--cyan)">
-      <div class="card-label">Win Rate</div>
-      <div class="card-value cyan">${s.win_rate}%</div>
-      <div class="card-sub dim">${s.wins}W / ${s.losses}L / ${s.ties}T</div>
+    <div class="bt-wl-divider"></div>
+    <div class="bt-wl-stat">
+      <div class="bt-wl-label">Wins</div>
+      <div class="bt-wl-val" style="color:var(--green)">${s.wins}</div>
+      <div class="bt-wl-sub">correct bracket</div>
     </div>
-    <div class="card" style="--accent:var(--${roiColor})">
-      <div class="card-label">ROI</div>
-      <div class="card-value ${roiColor}">${fmt.pct(s.roi)}</div>
-      <div class="card-sub dim">$${s.total_risked} risked</div>
+    <div class="bt-wl-divider"></div>
+    <div class="bt-wl-stat">
+      <div class="bt-wl-label">Losses</div>
+      <div class="bt-wl-val" style="color:var(--red)">${s.losses}</div>
+      <div class="bt-wl-sub">wrong bracket</div>
     </div>
-    <div class="card" style="--accent:var(--${shrpColor})">
-      <div class="card-label">Sharpe</div>
-      <div class="card-value ${shrpColor}">${s.sharpe}</div>
-      <div class="card-sub dim">annualised</div>
-    </div>
-    <div class="card" style="--accent:var(--${accColor})">
-      <div class="card-label">Model Accuracy</div>
-      <div class="card-value ${accColor}">${s.accuracy}%</div>
-      <div class="card-sub dim">Brier: ${s.brier}</div>
-    </div>
-    <div class="card" style="--accent:var(--yellow)">
-      <div class="card-label">Best Day</div>
-      <div class="card-value green">${fmt.dollar(s.best_pnl)}</div>
-      <div class="card-sub dim">${s.best_day}</div>
-    </div>
-    <div class="card" style="--accent:var(--red)">
-      <div class="card-label">Worst Day</div>
-      <div class="card-value red">${fmt.dollar(s.worst_pnl)}</div>
-      <div class="card-sub dim">${s.worst_day}</div>
-    </div>
-    <div class="card" style="--accent:var(--purple)">
-      <div class="card-label">Active Days</div>
-      <div class="card-value purple">${s.betting_days}/${s.total_days}</div>
-      <div class="card-sub dim">${s.no_bet_days} no-bet days</div>
+    <div class="bt-wl-note">
+      Forecast = Open-Meteo historical model for that day.<br>
+      Model picks the highest-probability bracket.<br>
+      W = model's pick matched Kalshi's settled bracket.
     </div>
   `;
 
-  // Charts
-  const labels = d.days.map(r => r.date.slice(5));  // MM-DD
-  const cumuls  = d.days.map(r => r.cumulative);
-  const dailies = d.days.map(r => r.pnl);
-
-  const chartDefaults = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: { duration: 600 },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: '#0d1117',
-        borderColor: '#1e2d3d',
-        borderWidth: 1,
-        titleColor: '#6e7681',
-        bodyColor: '#c9d1d9',
-        titleFont: { family: 'JetBrains Mono' },
-        bodyFont:  { family: 'JetBrains Mono' },
-      }
-    },
-    scales: {
-      x: {
-        ticks: { color: '#6e7681', font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 45 },
-        grid:  { color: 'rgba(30,45,61,0.5)' },
-      },
-      y: {
-        ticks: { color: '#6e7681', font: { family: 'JetBrains Mono', size: 10 },
-                 callback: v => '$' + v.toFixed(0) },
-        grid:  { color: 'rgba(30,45,61,0.5)' },
-      }
-    }
-  };
-
-  if (_pnlChart) _pnlChart.destroy();
-  _pnlChart = new Chart(document.getElementById('pnl-chart'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        data: cumuls,
-        borderColor: '#00ff88',
-        backgroundColor: 'rgba(0,255,136,0.04)',
-        borderWidth: 2,
-        pointRadius: 2,
-        pointHoverRadius: 5,
-        pointBackgroundColor: '#00ff88',
-        fill: true,
-        tension: 0.3,
-      }]
-    },
-    options: chartDefaults,
-  });
-
-  if (_dailyChart) _dailyChart.destroy();
-  _dailyChart = new Chart(document.getElementById('daily-chart'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        data: dailies,
-        backgroundColor: dailies.map(v => v >= 0 ? 'rgba(0,255,136,0.5)' : 'rgba(255,68,102,0.5)'),
-        borderColor:     dailies.map(v => v >= 0 ? '#00ff88' : '#ff4466'),
-        borderWidth: 1,
-        borderRadius: 2,
-      }]
-    },
-    options: chartDefaults,
-  });
-
-  // Day table
+  // Day table with clickable rows
   const tbody = document.getElementById('bt-tbody');
-  tbody.innerHTML = d.days.map(r => {
-    const pnlCls = r.pnl > 0 ? 'green' : r.pnl < 0 ? 'red' : 'dim';
-    const cumCls = r.cumulative > 0 ? 'green' : r.cumulative < 0 ? 'red' : 'dim';
-    const pCls   = r.model_prob >= 35 ? 'green' : 'yellow';
-    const rowCls = r.pnl > 0 ? 'row-win' : r.pnl < 0 ? 'row-loss' : '';
+  tbody.innerHTML = '';
+
+  d.days.forEach((r, i) => {
+    const rowCls = r.correct ? 'bt-row-win' : 'bt-row-loss';
+    const badge  = r.correct
+      ? '<span class="bt-badge-win">WIN</span>'
+      : '<span class="bt-badge-loss">LOSS</span>';
+    const expandId = `bt-exp-${i}`;
+
+    const mainRow = document.createElement('tr');
+    mainRow.className = rowCls;
+    mainRow.style.cursor = 'pointer';
+    mainRow.innerHTML = `
+      <td style="color:var(--text-dim);font-size:11px">▶</td>
+      <td>${r.date}</td>
+      <td class="yellow">${r.actual}°F</td>
+      <td class="dim">${r.forecast}°F <span style="font-size:10px;color:var(--text-dim)">(${r.forecast_src})</span></td>
+      <td class="cyan">${r.top_bracket}</td>
+      <td>${r.correct_bracket}</td>
+      <td>${badge}</td>
+    `;
+
+    const expandRow = document.createElement('tr');
+    expandRow.id = expandId;
+    expandRow.className = 'bt-expand';
+    expandRow.style.display = 'none';
+    expandRow.innerHTML = `<td colspan="7">${buildBracketGrid(r.brackets)}</td>`;
+
+    mainRow.addEventListener('click', () => {
+      const open = expandRow.style.display !== 'none';
+      expandRow.style.display = open ? 'none' : 'table-row';
+      mainRow.querySelector('td:first-child').textContent = open ? '▶' : '▼';
+    });
+
+    tbody.appendChild(mainRow);
+    tbody.appendChild(expandRow);
+  });
+}
+
+function buildBracketGrid(brackets) {
+  const rows = brackets.map(b => {
+    const barColor = b.is_win ? 'var(--green)' : b.is_top ? 'var(--cyan)' : 'rgba(255,255,255,0.2)';
+    const labelStyle = b.is_win ? 'color:var(--green);font-weight:700'
+                     : b.is_top ? 'color:var(--cyan)'
+                     : 'color:var(--text-dim)';
+    const tag = b.is_win && b.is_top ? ' ✓' : b.is_win ? ' ✓' : b.is_top ? ' ←model' : '';
     return `
-      <tr class="${rowCls}">
-        <td>${r.date}</td>
-        <td class="yellow">${r.actual}F</td>
-        <td class="dim">${r.forecast}F</td>
-        <td class="dim">${r.seasonal}F</td>
-        <td>${r.correct_bracket}</td>
-        <td class="${pCls}">${r.model_prob}%</td>
-        <td class="dim">${r.bets}</td>
-        <td class="dim">${r.won}/${r.lost}/${r.no_bet}</td>
-        <td class="${pnlCls}">${fmt.dollar(r.pnl)}</td>
-        <td class="${cumCls}">${fmt.dollar(r.cumulative)}</td>
-      </tr>`;
+      <div class="bt-bracket-row">
+        <div class="bt-bracket-label" style="${labelStyle}">${b.label}${tag}</div>
+        <div class="bt-bracket-pct" style="color:${barColor}">${b.prob}%</div>
+        <div class="bt-bracket-bar-wrap">
+          <div class="bt-bracket-bar" style="width:${Math.min(b.prob,100)}%;background:${barColor}"></div>
+        </div>
+      </div>`;
   }).join('');
+  return `<div class="bt-bracket-grid">${rows}</div>`;
 }
 
 async function refreshBacktest() {

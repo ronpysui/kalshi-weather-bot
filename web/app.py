@@ -16,7 +16,7 @@ from flask import Flask, jsonify, render_template
 
 import config
 from kalshi.api import get_todays_markets
-from weather.nws_forecast import get_effective_forecast
+from weather.nws_forecast import get_effective_forecast, get_current_temp
 from predictor.probability import parse_brackets, assign_probabilities
 from trader.edge import compute_signals
 from trader.sizer import kelly_contracts, expected_value
@@ -35,6 +35,21 @@ _cache = {
     "errors":    [],
 }
 _cache_lock = threading.Lock()
+
+
+def _temp_in_bracket(label: str, temp: float) -> bool:
+    """Return True if temp falls within the bracket described by label."""
+    s = label.lower().replace('°', '').strip()
+    if 'or above' in s:
+        lower = float(s.split('or')[0].strip())
+        return temp >= lower
+    if 'or below' in s:
+        upper = float(s.split('or')[0].strip())
+        return temp <= upper
+    if ' to ' in s:
+        parts = s.split(' to ')
+        return float(parts[0].strip()) <= temp <= float(parts[1].strip()) + 0.9
+    return False
 
 
 def _fetch_live():
@@ -56,9 +71,10 @@ def _fetch_live():
         sigma = config.SIGMA_MORNING
         lock_prediction(forecast, sigma)
 
-    brackets = parse_brackets(markets)
-    brackets = assign_probabilities(brackets, mu=forecast, sigma=sigma)
-    signals  = compute_signals(brackets)
+    brackets    = parse_brackets(markets)
+    brackets    = assign_probabilities(brackets, mu=forecast, sigma=sigma)
+    signals     = compute_signals(brackets)
+    current_temp = get_current_temp()
 
     now_et   = datetime.now(ET)
     lock     = get_lock()
@@ -75,6 +91,7 @@ def _fetch_live():
 
     return {
         "timestamp":    now_et.strftime("%Y-%m-%d %H:%M:%S ET"),
+        "current_temp": current_temp,
         "forecast":     round(forecast, 1),
         "sigma":        round(sigma, 1),
         "bankroll":     config.BANKROLL,
@@ -100,15 +117,19 @@ def _fetch_live():
         ],
         "signals": [
             {
-                "label":     s.label,
-                "ticker":    s.ticker,
-                "side":      s.side,
-                "our_prob":  round(s.our_prob * 100, 1),
-                "mkt_price": round(s.mkt_price * 100, 1),
-                "edge":      round(s.edge * 100, 1),
-                "ev":        round(expected_value(s) * 100, 2),
-                "contracts": kelly_contracts(s, config.BANKROLL),
-                "risk":      round(kelly_contracts(s, config.BANKROLL) * s.mkt_price, 2),
+                "label":      s.label,
+                "ticker":     s.ticker,
+                "side":       s.side,
+                "our_prob":   round(s.our_prob * 100, 1),
+                "mkt_price":  round(s.mkt_price * 100, 1),
+                "edge":       round(s.edge * 100, 1),
+                "ev":         round(expected_value(s) * 100, 2),
+                "contracts":  kelly_contracts(s, config.BANKROLL),
+                "risk":       round(kelly_contracts(s, config.BANKROLL) * s.mkt_price, 2),
+                "is_winning": (
+                    _temp_in_bracket(s.label, current_temp) if s.side == "yes"
+                    else not _temp_in_bracket(s.label, current_temp)
+                ) if current_temp is not None else None,
             }
             for s in signals
         ],
@@ -120,44 +141,34 @@ def _fetch_backtest():
     result = run_backtest(days=config.BACKTEST_DAYS)
 
     days_data = []
-    cumulative = 0.0
-    for d in reversed(result.days):
-        cumulative += d.pnl
+    for d in result.days:
         days_data.append({
-            "date":           str(d.date),
-            "actual":         d.actual_high,
-            "forecast":       round(d.avg_forecast, 1),
-            "seasonal":       d.seasonal_center,
-            "correct_bracket":d.correct_bracket or "--",
-            "model_prob":     round(d.model_prob_correct * 100, 1),
-            "bets":           d.bets_placed,
-            "won":            d.won,
-            "lost":           d.lost,
-            "no_bet":         d.no_bet,
-            "pnl":            round(d.pnl, 2),
-            "cumulative":     round(cumulative, 2),
+            "date":            str(d.date),
+            "actual":          d.actual_high,
+            "forecast":        d.forecast,
+            "forecast_src":    d.forecast_src,
+            "sigma":           d.sigma,
+            "correct_bracket": d.correct_bracket or "--",
+            "top_bracket":     d.top_bracket or "--",
+            "correct":         d.correct,
+            "brackets": [
+                {
+                    "label":  s.label,
+                    "prob":   s.prob,
+                    "result": s.result,
+                    "is_top": s.is_top,
+                    "is_win": s.is_win,
+                }
+                for s in d.brackets
+            ],
         })
 
     return {
         "summary": {
-            "total_pnl":    round(result.total_pnl, 2),
-            "avg_daily":    round(result.avg_daily_pnl, 2),
-            "win_rate":     round(result.win_rate * 100, 1),
-            "wins":         sum(1 for d in result.days if d.pnl > 0),
-            "losses":       sum(1 for d in result.days if d.pnl < 0),
-            "ties":         sum(1 for d in result.days if d.pnl == 0),
-            "roi":          round(result.roi * 100, 1),
-            "total_risked": round(result.total_risked, 2),
-            "sharpe":       round(result.sharpe, 2),
-            "accuracy":     round(result.accuracy * 100, 1),
-            "brier":        round(result.avg_brier, 3),
-            "betting_days": result.betting_days,
-            "no_bet_days":  result.no_bet_days,
-            "total_days":   len(result.days),
-            "best_day":     str(result.best_day.date),
-            "best_pnl":     round(result.best_day.pnl, 2),
-            "worst_day":    str(result.worst_day.date),
-            "worst_pnl":    round(result.worst_day.pnl, 2),
+            "wins":       result.wins,
+            "losses":     result.losses,
+            "win_rate":   round(result.win_rate * 100, 1),
+            "total_days": result.total,
         },
         "days": days_data,
     }

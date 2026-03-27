@@ -34,7 +34,7 @@ from weather.nws_forecast import get_effective_forecast
 from predictor.probability import parse_brackets, assign_probabilities
 from trader.edge import compute_signals
 from trader.sizer import kelly_contracts
-from trader.daily_lock import should_bet, is_locked, get_lock, lock as write_lock, lock_prediction
+from trader.daily_lock import already_bet, record_bet, is_locked, get_lock, lock_prediction, in_bet_window
 from display.dashboard import render_live, render_backtest, console
 
 ET = ZoneInfo("America/New_York")
@@ -112,10 +112,13 @@ def run_once(bankroll: float) -> float:
     # 6. Render
     render_live(brackets, signals, forecast, sigma, bankroll)
 
-    # 7. Place orders — ONLY during morning bet window, ONLY once per day
-    if should_bet():
-        placed_bets = []
+    # 7. Place orders opportunistically — fire each bracket the moment edge appears.
+    #    Each bracket ticker can only be bet ONCE per day.
+    if in_bet_window():
         for sig in signals:
+            if already_bet(sig.ticker):
+                continue  # already placed for this bracket today
+
             contracts = kelly_contracts(sig, bankroll)
             if contracts <= 0:
                 continue
@@ -135,7 +138,7 @@ def run_once(bankroll: float) -> float:
                 edge=sig.edge,
                 our_prob=sig.our_prob,
             )
-            placed_bets.append({
+            bet = {
                 "ticker":    sig.ticker,
                 "side":      sig.side,
                 "contracts": contracts,
@@ -143,23 +146,14 @@ def run_once(bankroll: float) -> float:
                 "edge":      round(sig.edge * 100, 1),
                 "our_prob":  round(sig.our_prob * 100, 1),
                 "label":     sig.label,
-            })
-
-        # Lock for the rest of the day
-        write_lock(forecast, sigma, placed_bets)
-        console.print(f"[green]Bets locked for today ({len(placed_bets)} placed).[/]")
-
-    elif is_locked():
-        lk = get_lock()
-        console.print(
-            f"[dim]Today's bets already locked at {lk['locked_at']}. "
-            f"Monitoring only.[/]"
-        )
+            }
+            record_bet(bet)
+            console.print(
+                f"[green]Bet placed: {sig.label} {sig.side.upper()} "
+                f"{contracts} contracts @ {price_cents}c (edge +{round(sig.edge*100,1)}c)[/]"
+            )
     else:
-        console.print(
-            f"[dim]Bet window opens at {config.BET_HOUR_ET}:00 AM ET. "
-            f"Monitoring only.[/]"
-        )
+        console.print("[dim]Outside market hours — monitoring only.[/]")
 
     return bankroll
 
