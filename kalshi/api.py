@@ -86,6 +86,21 @@ def _post(path: str, body: dict) -> dict:
     return resp.json()
 
 
+# ── Account ───────────────────────────────────────────────────────────────────
+
+def get_account_balance() -> float | None:
+    """
+    Return available Kalshi balance in USD, or None if unauthenticated.
+    Kalshi returns balance in cents — divide by 100.
+    """
+    try:
+        data = _get("/portfolio/balance", auth=True)
+        cents = data.get("balance", data.get("available_balance", 0))
+        return round(cents / 100, 2)
+    except Exception:
+        return None
+
+
 # ── Market data ───────────────────────────────────────────────────────────────
 
 def get_event(event_ticker: str) -> dict:

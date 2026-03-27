@@ -29,7 +29,7 @@ from zoneinfo import ZoneInfo
 from rich.console import Console
 
 import config
-from kalshi.api import get_todays_markets, place_order
+from kalshi.api import get_todays_markets, place_order, get_account_balance
 from weather.nws_forecast import get_effective_forecast
 from predictor.probability import parse_brackets, assign_probabilities
 from trader.edge import compute_signals
@@ -180,7 +180,9 @@ def main():
         run_backtest()
         return
 
-    bankroll = config.BANKROLL
+    # Use live Kalshi balance if authenticated, fall back to config
+    live_balance = get_account_balance()
+    bankroll = live_balance if live_balance is not None else config.BANKROLL
     _ensure_log()
 
     console.print(

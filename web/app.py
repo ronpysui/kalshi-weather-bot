@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, render_template
 
 import config
-from kalshi.api import get_todays_markets
+from kalshi.api import get_todays_markets, get_account_balance
 from weather.nws_forecast import get_effective_forecast, get_current_temp
 from predictor.probability import parse_brackets, assign_probabilities
 from trader.edge import compute_signals
@@ -94,7 +94,7 @@ def _fetch_live():
         "current_temp": current_temp,
         "forecast":     round(forecast, 1),
         "sigma":        round(sigma, 1),
-        "bankroll":     config.BANKROLL,
+        "bankroll":     get_account_balance() or config.BANKROLL,
         "dry_run":      config.DRY_RUN,
         "min_edge":     config.MIN_EDGE,
         "bet_hour_et":  config.BET_HOUR_ET,
