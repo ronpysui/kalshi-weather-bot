@@ -20,15 +20,6 @@ import config
 BASE    = config.KALSHI_BASE_URL
 HEADERS = {"Content-Type": "application/json"}
 
-# Known Kalshi MLB series tickers to try
-MLB_SERIES_CANDIDATES = [
-    "KXBASEBALLMLB",
-    "MLBWIN",
-    "KXMLB",
-    "MLB",
-]
-
-
 def _get(path: str, params: dict = None) -> dict:
     resp = requests.get(BASE + path, headers=HEADERS, params=params, timeout=10)
     resp.raise_for_status()
@@ -41,31 +32,25 @@ def _team_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
 
 
-def discover_mlb_series() -> str | None:
-    """Try known series tickers until one returns data."""
-    for series in MLB_SERIES_CANDIDATES:
-        try:
-            data = _get("/markets", {"series_ticker": series, "status": "open", "limit": 1})
-            if data.get("markets"):
-                print(f"[kalshi_mlb] Found MLB series: {series}")
-                return series
-        except Exception:
-            continue
-    return None
-
-
 def get_open_mlb_markets(series: str = None) -> list[dict]:
-    """Return all open Kalshi MLB game markets."""
-    if series is None:
-        series = discover_mlb_series()
-    if not series:
-        return []
+    """
+    Return today's open Kalshi MLB individual game markets.
+    Searches for markets closing today (game win markets close at first pitch).
+    """
+    from datetime import date, timedelta
+    today     = date.today()
+    tomorrow  = today + timedelta(days=1)
 
     all_markets = []
     cursor = None
 
     while True:
-        params = {"series_ticker": series, "status": "open", "limit": 200}
+        params = {
+            "status":            "open",
+            "limit":             200,
+            "min_close_ts":      int(datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=timezone.utc).timestamp()),
+            "max_close_ts":      int(datetime(tomorrow.year, tomorrow.month, tomorrow.day, 6, 0, 0, tzinfo=timezone.utc).timestamp()),
+        }
         if cursor:
             params["cursor"] = cursor
         try:
@@ -75,12 +60,41 @@ def get_open_mlb_markets(series: str = None) -> list[dict]:
             break
 
         markets = data.get("markets", [])
-        all_markets.extend(markets)
+        # Filter to baseball game markets — title contains "win" and team names
+        baseball = [
+            m for m in markets
+            if _is_game_market(m)
+        ]
+        all_markets.extend(baseball)
         cursor = data.get("cursor")
         if not cursor or len(markets) < 200:
             break
 
     return all_markets
+
+
+def _is_game_market(m: dict) -> bool:
+    """Return True if this market looks like an individual MLB game win market."""
+    title = (m.get("title") or "").lower()
+    rules = (m.get("rules_primary") or "").lower()
+    ticker = (m.get("ticker") or "").upper()
+
+    # Must mention "win" and be a short-expiry market (closes today)
+    if "win" not in title and "win" not in rules:
+        return False
+    # Exclude futures (close time far in future)
+    close = m.get("close_time", "")
+    if "2027" in close or "2028" in close or "2029" in close:
+        return False
+    # Must look like a game (not a season future)
+    if "championship" in title or "pennant" in title or "world series" in title:
+        return False
+    return True
+
+
+def discover_mlb_series() -> str | None:
+    """Legacy — series not needed for game markets."""
+    return "KXMLB"
 
 
 def get_mlb_events(series: str = None) -> list[dict]:
