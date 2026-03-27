@@ -349,55 +349,68 @@ def api_baseball():
     try:
         from baseball.odds_api import get_mlb_games
         from baseball.kalshi_mlb import get_mlb_events, match_to_odds
-        from baseball.analyzer import analyze_all, minutes_to_first_pitch
+        from baseball.analyzer import analyze_all, analyze_game, minutes_to_first_pitch, LOCK_OUT_MIN
 
         odds_games    = get_mlb_games()
         kalshi_events = get_mlb_events()
         matched       = match_to_odds(kalshi_events, odds_games)
-        signals       = analyze_all(matched)
         bankroll      = get_account_balance() or config.BANKROLL
 
-        games_out = []
-        for g in matched:
-            mins = minutes_to_first_pitch(g["commence"])
-            games_out.append({
-                "id":          g["id"],
-                "home":        g["home"],
-                "away":        g["away"],
-                "commence":    g["commence"].isoformat(),
-                "mins_to_game": mins,
-                "home_prob":   round(g["home_prob"] * 100, 1),
-                "away_prob":   round(g["away_prob"] * 100, 1),
-                "home_kalshi": round(g["kalshi"].get("home_yes", 0) * 100, 1),
-                "away_kalshi": round(g["kalshi"].get("away_yes", 0) * 100, 1),
-                "num_books":   g["num_books"],
-            })
-
-        signals_out = []
-        for s in signals:
+        # Build signal index keyed by game_id for quick lookup
+        edge_signals = analyze_all(matched)  # only edge > threshold
+        sig_by_game  = {}
+        for s in edge_signals:
+            key = (s.game_id, s.side)
             contracts = max(1, int(bankroll * s.kelly_frac / max(s.kalshi_prob, 0.01)))
-            signals_out.append({
-                "game_id":       s.game_id,
-                "home":          s.home,
-                "away":          s.away,
-                "team":          s.team,
-                "side":          s.side,
-                "ticker":        s.ticker,
-                "vegas_prob":    round(s.vegas_prob * 100, 1),
-                "kalshi_prob":   round(s.kalshi_prob * 100, 1),
-                "edge":          round(s.edge * 100, 1),
-                "ev":            round(s.ev * 100, 2),
-                "kelly_frac":    round(s.kelly_frac * 100, 1),
-                "contracts":     contracts,
-                "risk":          round(contracts * s.kalshi_prob, 2),
-                "status":        s.status,
-                "mins_to_game":  s.minutes_to_game,
+            sig_by_game[key] = {
+                "team":        s.team,
+                "side":        s.side,
+                "ticker":      s.ticker,
+                "vegas_prob":  round(s.vegas_prob * 100, 1),
+                "kalshi_prob": round(s.kalshi_prob * 100, 1),
+                "edge":        round(s.edge * 100, 1),
+                "ev":          round(s.ev * 100, 2),
+                "kelly_frac":  round(s.kelly_frac * 100, 1),
+                "contracts":   contracts,
+                "risk":        round(contracts * s.kalshi_prob, 2),
+                "status":      s.status,
+                "mins_to_game": s.minutes_to_game,
+            }
+
+        # All games sorted by first pitch (soonest first), includes pre-game + live
+        games_out = []
+        for g in sorted(matched, key=lambda x: x["commence"]):
+            mins = minutes_to_first_pitch(g["commence"])
+            kalshi = g["kalshi"]
+
+            home_prob   = round(g["home_prob"] * 100, 1)
+            away_prob   = round(g["away_prob"] * 100, 1)
+            home_kalshi = round(kalshi.get("home_yes", 0) * 100, 1)
+            away_kalshi = round(kalshi.get("away_yes", 0) * 100, 1)
+            home_edge   = round(home_prob - home_kalshi, 1)
+            away_edge   = round(away_prob - away_kalshi, 1)
+
+            games_out.append({
+                "id":           g["id"],
+                "home":         g["home"],
+                "away":         g["away"],
+                "commence":     g["commence"].isoformat(),
+                "mins_to_game": mins,
+                "home_prob":    home_prob,
+                "away_prob":    away_prob,
+                "home_kalshi":  home_kalshi,
+                "away_kalshi":  away_kalshi,
+                "home_edge":    home_edge,
+                "away_edge":    away_edge,
+                "num_books":    g["num_books"],
+                # Best signal for this game (if any)
+                "home_signal":  sig_by_game.get((g["id"], "home")),
+                "away_signal":  sig_by_game.get((g["id"], "away")),
             })
 
         return jsonify({
-            "games":    games_out,
-            "signals":  signals_out,
-            "bankroll": bankroll,
+            "games":        games_out,
+            "bankroll":     bankroll,
             "has_odds_key": bool(os.getenv("ODDS_API_KEY")),
         })
     except Exception as e:
