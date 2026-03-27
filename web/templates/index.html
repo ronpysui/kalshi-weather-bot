@@ -1112,7 +1112,11 @@ function showPage(name, btn) {
   btn.classList.add('active');
   if (name === 'backtest' && !window._btLoaded) loadBacktest();
   if (name === 'baseball') { loadBaseball(true); }
-  else { if (_bbRefreshTimer) { clearInterval(_bbRefreshTimer); _bbRefreshTimer = null; } const lbl = document.getElementById('bb-refresh-label'); if (lbl) lbl.textContent = ''; }
+  else {
+    if (_bbRefreshTimer) { clearInterval(_bbRefreshTimer); _bbRefreshTimer = null; }
+    if (_nextGameTimer)  { clearInterval(_nextGameTimer);  _nextGameTimer  = null; }
+    const lbl = document.getElementById('bb-refresh-label'); if (lbl) lbl.textContent = '';
+  }
   if (name === 'log') loadTradeLog();
 }
 
@@ -1667,10 +1671,34 @@ async function refreshBacktest() {
 }
 
 // ── Trade log ──────────────────────────────────────────────────────────────
-let _bbPnlChart      = null;
-let _bbRefreshTimer  = null;
-let _bbCountdown     = 0;
-const BB_REFRESH_SEC = 60;
+let _bbPnlChart        = null;
+let _bbRefreshTimer    = null;
+let _bbCountdown       = 0;
+const BB_REFRESH_SEC   = 60;
+
+// ── Next-game countdown (ticks every second) ────────────────────────────────
+let _nextGameTimer     = null;
+let _nextGameEpoch     = null;   // ms epoch of next game's first pitch
+
+function _bbStartNextGameCountdown(commenceISO) {
+  if (_nextGameTimer) { clearInterval(_nextGameTimer); _nextGameTimer = null; }
+  _nextGameEpoch = new Date(commenceISO).getTime();
+  _nextGameTimer = setInterval(_bbTickNextGame, 1000);
+  _bbTickNextGame();
+}
+
+function _bbTickNextGame() {
+  const el = document.getElementById('bb-next-game-cd');
+  if (!el) { clearInterval(_nextGameTimer); _nextGameTimer = null; return; }
+  const diff = _nextGameEpoch - Date.now();
+  if (diff <= 0) { el.textContent = 'starting now'; return; }
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  el.textContent = h > 0
+    ? `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
+    : `${m}m ${String(s).padStart(2,'0')}s`;
+}
 
 function _bbTickCountdown() {
   _bbCountdown--;
@@ -1733,20 +1761,44 @@ async function loadBaseball(manual = false) {
 
     // ── All games as cards, sorted by first pitch ─────────────────────────────
     if (data.games && data.games.length) {
-      const sigCount = data.games.filter(g => g.home_signal || g.away_signal).length;
+      const MIN_EDGE_DISPLAY = 4; // must match backend BASEBALL_MIN_EDGE
+      const sigCount = data.games.filter(g =>
+        (g.home_edge >= MIN_EDGE_DISPLAY) || (g.away_edge >= MIN_EDGE_DISPLAY)
+      ).length;
+
+      // Find next upcoming game for the countdown
+      const upcoming = data.games.filter(g => g.mins_to_game > 0)
+        .sort((a,b) => a.mins_to_game - b.mins_to_game);
+      if (upcoming.length) _bbStartNextGameCountdown(upcoming[0].commence);
+
+      // Next-game banner
+      const nextGame = upcoming[0];
+      const nextBannerHtml = nextGame ? `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;margin-bottom:16px;
+                    background:rgba(0,200,255,0.06);border:1px solid rgba(0,200,255,0.15);
+                    border-radius:6px;font-size:11px;color:var(--text-dim)">
+          <span style="color:var(--cyan);font-size:13px">⏱</span>
+          <span>Next game: <span style="color:var(--text-bright);font-weight:600">${nextGame.away} @ ${nextGame.home}</span></span>
+          <span style="margin-left:auto;color:var(--cyan);font-weight:700;font-variant-numeric:tabular-nums"
+                id="bb-next-game-cd">--</span>
+        </div>` : '';
+
       html += `
         <div style="margin-bottom:24px">
+          ${nextBannerHtml}
           <div class="panel-label" style="margin-bottom:12px">
             SIGNALS &nbsp;<span class="dim" style="font-size:10px">edge > 4¢ highlighted · sorted by first pitch</span>
             ${sigCount ? `<span style="margin-left:8px;font-size:10px;color:var(--green)">${sigCount} edge found</span>` : ''}
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:12px">
             ${data.games.map(g => {
-              // Pick the best signal for this game (home or away, whichever has higher edge)
+              const homeEdgeVal = g.home_edge || 0;
+              const awayEdgeVal = g.away_edge || 0;
+              const bestEdge = Math.max(homeEdgeVal, awayEdgeVal);
+              const hasEdge = bestEdge >= MIN_EDGE_DISPLAY;
               const hs = g.home_signal;
               const as_ = g.away_signal;
               const bestSig = hs && as_ ? (hs.edge >= as_.edge ? hs : as_) : (hs || as_);
-              const hasEdge = !!bestSig;
               const pitchTime = new Date(g.commence).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',timeZone:'America/New_York'});
               const minsLabel = g.mins_to_game > 60 ? `${pitchTime} ET`
                               : g.mins_to_game > 5  ? `🟡 ${g.mins_to_game}m to pitch`
@@ -1754,13 +1806,8 @@ async function loadBaseball(manual = false) {
                               : '🔴 LIVE';
 
               const borderStyle = hasEdge ? 'border-color:rgba(0,255,136,0.4)' : '';
-
-              // Show both home and away edge stats
-              const homeEdgeVal = g.home_edge;
-              const awayEdgeVal = g.away_edge;
-
-              const homeEdgeClass = homeEdgeVal >= 4 ? 'green' : homeEdgeVal <= -4 ? 'red' : 'dim';
-              const awayEdgeClass = awayEdgeVal >= 4 ? 'green' : awayEdgeVal <= -4 ? 'red' : 'dim';
+              const homeEdgeClass = homeEdgeVal >= MIN_EDGE_DISPLAY ? 'green' : homeEdgeVal <= -MIN_EDGE_DISPLAY ? 'red' : 'dim';
+              const awayEdgeClass = awayEdgeVal >= MIN_EDGE_DISPLAY ? 'green' : awayEdgeVal <= -MIN_EDGE_DISPLAY ? 'red' : 'dim';
 
               const placeBtn = bestSig
                 ? `<div style="margin-top:8px;font-size:10px;color:var(--text-dim)">● auto-bet: ${bestSig.contracts} contracts @ ${bestSig.kalshi_prob}¢ · risk $${bestSig.risk}</div>`
