@@ -1689,7 +1689,7 @@ function _bbStartNextGameCountdown(commenceISO) {
 
 function _bbTickNextGame() {
   const el = document.getElementById('bb-next-game-cd');
-  if (!el) { clearInterval(_nextGameTimer); _nextGameTimer = null; return; }
+  if (!el) return;  // element not in DOM yet — interval keeps running, will find it
   const diff = _nextGameEpoch - Date.now();
   if (diff <= 0) { el.textContent = 'starting now'; return; }
   const h = Math.floor(diff / 3600000);
@@ -1766,10 +1766,9 @@ async function loadBaseball(manual = false) {
         (g.home_edge >= MIN_EDGE_DISPLAY) || (g.away_edge >= MIN_EDGE_DISPLAY)
       ).length;
 
-      // Find next upcoming game for the countdown
+      // Find next upcoming game for the countdown (started after DOM renders)
       const upcoming = data.games.filter(g => g.mins_to_game > 0)
         .sort((a,b) => a.mins_to_game - b.mins_to_game);
-      if (upcoming.length) _bbStartNextGameCountdown(upcoming[0].commence);
 
       // Next-game banner
       const nextGame = upcoming[0];
@@ -1864,6 +1863,8 @@ async function loadBaseball(manual = false) {
 
     el.innerHTML = html;
     renderPnlChart(betsData);
+    // Start next-game countdown AFTER DOM is updated so element exists
+    if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].commence);
     _bbStartCountdown();
   } catch(e) {
     document.getElementById('baseball-content').innerHTML =
