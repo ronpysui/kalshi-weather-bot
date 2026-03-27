@@ -200,15 +200,16 @@ def _fetch_backtest():
     }
 
 
-def _refresh_live():
+def _refresh_live(city: str = None):
+    city = city or config.DEFAULT_CITY
     try:
-        data = _fetch_live()
+        data = _fetch_live(city)
         with _cache_lock:
-            _cache["live"]      = data
-            _cache["last_live"] = datetime.now(ET).isoformat()
+            _city_cache(city)["live"]      = data
+            _city_cache(city)["last_live"] = datetime.now(ET).isoformat()
     except Exception as e:
         with _cache_lock:
-            _cache["errors"].append(str(e))
+            _city_cache(city).setdefault("errors", []).append(str(e))
 
 
 def _refresh_backtest():
@@ -263,7 +264,14 @@ def api_backtest():
 
 @app.route("/api/refresh/live")
 def api_refresh_live():
-    t = threading.Thread(target=_refresh_live, daemon=True)
+    from flask import request as req
+    city = req.args.get("city", config.DEFAULT_CITY).upper()
+    if city not in config.CITIES:
+        city = config.DEFAULT_CITY
+    # Clear cached data so next /api/live call fetches fresh
+    with _cache_lock:
+        _city_cache(city)["live"] = None
+    t = threading.Thread(target=lambda: _refresh_live(city), daemon=True)
     t.start()
     return jsonify({"status": "refreshing"})
 

@@ -1455,7 +1455,7 @@ async function refreshLive() {
   const btn = document.getElementById('btn-refresh-live');
   btn.classList.add('loading');
   btn.textContent = '↺ refreshing...';
-  await fetch('/api/refresh/live');
+  await fetch(`/api/refresh/live?city=${currentCity}`);
   await new Promise(r => setTimeout(r, 1500));
   await loadLive();
   btn.classList.remove('loading');
