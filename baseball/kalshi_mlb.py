@@ -197,6 +197,12 @@ def get_mlb_events(series: str = None) -> list[dict]:
 
         # YES price: midpoint of bid/ask in cents → fraction
         def _yes_price(m):
+            # Prefer dollar fields (0–1 floats); fall back to cent fields (/100)
+            bid_d = m.get("yes_bid_dollars")
+            ask_d = m.get("yes_ask_dollars")
+            if bid_d is not None and ask_d is not None:
+                return (float(bid_d) + float(ask_d)) / 2
+            # cent fields (legacy / fallback)
             bid = m.get("yes_bid") or 0
             ask = m.get("yes_ask") or 99
             return (bid + ask) / 2 / 100
