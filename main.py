@@ -336,16 +336,17 @@ def main():
     )
 
     if args.once:
-        run_once(bankroll)
+        # run_once(bankroll)  # Temperature bot disabled — baseball only
         run_baseball_once(bankroll)
         return
 
     try:
         while True:
-            try:
-                bankroll = run_once(bankroll)
-            except Exception as e:
-                console.print(f"[red]Temp bot error: {e}[/]")
+            # Temperature bot disabled — baseball only
+            # try:
+            #     bankroll = run_once(bankroll)
+            # except Exception as e:
+            #     console.print(f"[red]Temp bot error: {e}[/]")
 
             try:
                 run_baseball_once(bankroll)

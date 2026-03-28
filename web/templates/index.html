@@ -12,12 +12,12 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:         #090b0e;
-      --bg1:        #0d1117;
-      --bg2:        #111820;
-      --bg3:        #161e2a;
-      --border:     #1e2d3d;
-      --border2:    #243040;
+      --bg:         #050507;
+      --bg1:        #0a0a0f;
+      --bg2:        #0e0e14;
+      --bg3:        #14141c;
+      --border:     #1a1a25;
+      --border2:    #252535;
       --green:      #00ff88;
       --green-dim:  #00cc6a;
       --red:        #ff4466;
@@ -64,7 +64,16 @@
     .header-left {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 10px;
+    }
+
+    .online-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 2s infinite;
+      flex-shrink: 0;
     }
 
     .logo {
@@ -72,22 +81,9 @@
       font-weight: 700;
       letter-spacing: 0.08em;
       color: var(--green);
-      text-shadow: 0 0 20px rgba(0,255,136,0.4);
     }
 
     .logo span { color: var(--text-dim); font-weight: 400; }
-
-    .tag {
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      padding: 2px 8px;
-      border-radius: 3px;
-      text-transform: uppercase;
-    }
-
-    .tag-dry  { background: rgba(255,215,0,0.12); color: var(--yellow); border: 1px solid rgba(255,215,0,0.25); }
-    .tag-live { background: rgba(0,255,136,0.12); color: var(--green);  border: 1px solid rgba(0,255,136,0.25); }
 
     .header-right {
       display: flex;
@@ -106,31 +102,6 @@
 
     .clock span { color: var(--cyan); }
 
-    .refresh-countdown {
-      font-size: 11px;
-      color: var(--text-dim);
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-
-    .countdown-bar-wrap {
-      width: 40px;
-      height: 3px;
-      background: var(--border);
-      border-radius: 2px;
-      overflow: hidden;
-    }
-
-    .countdown-bar {
-      height: 100%;
-      background: var(--cyan);
-      border-radius: 2px;
-      transition: width 1s linear;
-    }
-
-    /* nav and city-switcher removed — single-page layout */
-
     /* ── Layout ────────────────────────────────────────────────────────────── */
     main {
       padding: 20px 24px;
@@ -140,6 +111,22 @@
 
     .page { display: none; }
     .page.active { display: block; }
+
+    /* ── Dashboard two-column grid ────────────────────────────────────────── */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+      align-items: start;
+    }
+    .dash-sidebar {
+      position: sticky;
+      top: 72px;
+    }
+    @media (max-width: 1100px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+      .dash-sidebar { position: static; }
+    }
 
     /* ── Section header ────────────────────────────────────────────────────── */
     .section-header {
@@ -278,7 +265,7 @@
     thead th:first-child { text-align: left; }
 
     tbody tr {
-      border-bottom: 1px solid rgba(30,45,61,0.5);
+      border-bottom: 1px solid rgba(26,26,37,0.5);
       transition: background 0.1s;
     }
 
@@ -307,19 +294,21 @@
     }
 
     .prob-bar-wrap {
-      width: 80px;
-      height: 4px;
-      background: var(--bg3);
+      background: rgba(255,255,255,0.05);
       border-radius: 2px;
-      overflow: hidden;
+      height: 8px;
+      width: 100%;
     }
 
     .prob-bar {
-      height: 100%;
+      height: 8px;
       border-radius: 2px;
-      background: var(--cyan);
-      transition: width 0.6s ease;
+      background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+      transition: width 0.4s ease;
     }
+
+    .prob-bar.top { background: var(--green); }
+    tr.bracket-top { background: rgba(0,255,136,0.05); }
 
     /* ── Edge pill ─────────────────────────────────────────────────────────── */
     .edge-pill {
@@ -344,82 +333,6 @@
     .sig-row-neutral { border-left: 2px solid #444; }
     .sig-row-winning:hover { background: rgba(0, 255, 136, 0.14); }
     .sig-row-losing:hover  { background: rgba(255, 59,  59,  0.14); }
-
-    /* ── Forecast hero ──────────────────────────────────────────────────────── */
-    .forecast-hero {
-      background: var(--panel-bg);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 24px 28px;
-      display: flex;
-      align-items: center;
-      gap: 40px;
-      flex-wrap: wrap;
-    }
-    .fh-loading { color: var(--text-dim); font-size: 13px; }
-    .fh-main { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
-    .fh-label { font-size: 10px; letter-spacing: 0.12em; color: var(--text-dim); text-transform: uppercase; }
-    .fh-temp  { font-size: 56px; font-weight: 700; color: var(--cyan); line-height: 1; }
-    .fh-sigma { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
-    .fh-divider { width: 1px; height: 70px; background: var(--border); }
-    .fh-stat  { display: flex; flex-direction: column; gap: 4px; }
-    .fh-stat-val  { font-size: 24px; font-weight: 700; }
-    .fh-stat-sub  { font-size: 11px; color: var(--text-dim); }
-    .fh-lock  { margin-left: auto; font-size: 11px; color: var(--text-dim); text-align: right; line-height: 1.8; }
-    .fh-lock strong { color: var(--green); font-weight: 600; }
-
-    /* ── Bracket prob bar ───────────────────────────────────────────────────── */
-    .prob-bar-wrap { background: rgba(255,255,255,0.05); border-radius: 2px; height: 8px; width: 100%; }
-    .prob-bar      { height: 8px; border-radius: 2px; background: var(--cyan); transition: width 0.4s ease; }
-    .prob-bar.top  { background: var(--green); }
-    tr.bracket-top { background: rgba(0,255,136,0.05); }
-
-    /* ── Backtest W/L hero ──────────────────────────────────────────────────── */
-    .bt-wl-hero {
-      display: flex; align-items: center; gap: 40px; flex-wrap: wrap;
-      background: var(--panel-bg); border: 1px solid var(--border);
-      border-radius: 4px; padding: 24px 28px;
-    }
-    .bt-wl-stat { display: flex; flex-direction: column; gap: 4px; }
-    .bt-wl-label { font-size: 10px; letter-spacing: 0.12em; color: var(--text-dim); text-transform: uppercase; }
-    .bt-wl-val   { font-size: 48px; font-weight: 700; line-height: 1; }
-    .bt-wl-sub   { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
-    .bt-wl-divider { width: 1px; height: 60px; background: var(--border); }
-    .bt-wl-note { margin-left: auto; font-size: 11px; color: var(--text-dim); line-height: 1.8; max-width: 280px; }
-
-    /* ── Backtest table rows ────────────────────────────────────────────────── */
-    .bt-row-win  { border-left: 2px solid var(--green); }
-    .bt-row-loss { border-left: 2px solid var(--red); }
-    .bt-row-win:hover  { background: rgba(0,255,136,0.05); cursor:pointer; }
-    .bt-row-loss:hover { background: rgba(255,59,59,0.05);  cursor:pointer; }
-    .bt-expand { background: var(--panel-bg); }
-    .bt-expand td { padding: 12px 16px !important; }
-    .bt-bracket-grid {
-      display: flex; flex-direction: column; gap: 6px;
-      max-width: 500px;
-    }
-    .bt-bracket-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
-    .bt-bracket-label { width: 110px; flex-shrink: 0; }
-    .bt-bracket-pct { width: 44px; text-align: right; flex-shrink: 0; font-weight: 600; }
-    .bt-bracket-bar-wrap { flex: 1; background: rgba(255,255,255,0.05); border-radius: 2px; height: 6px; }
-    .bt-bracket-bar { height: 6px; border-radius: 2px; }
-    .bt-badge-win  { display:inline-block; padding:2px 8px; border-radius:2px; background:rgba(0,255,136,0.15); color:var(--green); font-size:11px; font-weight:700; letter-spacing:.08em; }
-    .bt-badge-loss { display:inline-block; padding:2px 8px; border-radius:2px; background:rgba(255,59,59,0.15);  color:var(--red);   font-size:11px; font-weight:700; letter-spacing:.08em; }
-
-    /* ── Forecast bar ──────────────────────────────────────────────────────── */
-    .forecast-bar {
-      display: flex;
-      align-items: center;
-      gap: 32px;
-      padding: 14px 20px;
-      background: var(--bg2);
-      border-bottom: 1px solid var(--border);
-      font-size: 12px;
-    }
-
-    .forecast-item { display: flex; align-items: baseline; gap: 6px; }
-    .forecast-label { color: var(--text-dim); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
-    .forecast-value { font-size: 20px; font-weight: 700; }
 
     /* ── Chart container ───────────────────────────────────────────────────── */
     .chart-wrap {
@@ -511,48 +424,9 @@
       font-size: 12px;
     }
 
-    /* ── Scanline overlay ──────────────────────────────────────────────────── */
-    body::after {
-      content: '';
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0,0,0,0.015) 2px,
-        rgba(0,0,0,0.015) 4px
-      );
-      pointer-events: none;
-      z-index: 9999;
-    }
-
-    /* ── Blink cursor ──────────────────────────────────────────────────────── */
-    .cursor::after {
-      content: '▋';
-      animation: blink 1s step-end infinite;
-      color: var(--green);
-      font-size: 0.8em;
-    }
-
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-
-    /* ── Value flash on update ─────────────────────────────────────────────── */
-    @keyframes flash {
-      0%   { color: var(--cyan); }
-      100% { color: inherit; }
-    }
-
-    .flash { animation: flash 0.6s ease-out; }
-
     /* ── Positive / negative row highlight ─────────────────────────────────── */
     tbody tr.row-win  { border-left: 2px solid var(--green); }
     tbody tr.row-loss { border-left: 2px solid var(--red); }
-
-    /* ── Gradient prob bar ─────────────────────────────────────────────────── */
-    .prob-bar {
-      background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
-    }
 
     /* ── Tooltip ───────────────────────────────────────────────────────────── */
     .tooltip {
@@ -563,251 +437,46 @@
       border-top: 1px solid var(--border);
     }
 
-    /* ── Today's bets box ──────────────────────────────────────────────────── */
-    .bets-box {
-      background: var(--bg1);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      margin-bottom: 16px;
-      overflow: hidden;
-    }
-
-    .bets-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 18px;
-      background: rgba(0,255,136,0.04);
-      border-bottom: 1px solid rgba(0,255,136,0.12);
-    }
-
-    .bets-title {
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--green);
-    }
-
-    .bankroll-control {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 11px;
-      color: var(--text-dim);
-    }
-
-    .bankroll-input {
-      background: var(--bg3);
-      border: 1px solid var(--border2);
-      border-radius: 4px;
-      color: var(--green);
-      font-family: var(--mono);
-      font-size: 13px;
-      font-weight: 600;
-      padding: 4px 8px;
-      width: 90px;
-      text-align: right;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-
-    .bankroll-input:focus { border-color: var(--green); }
-
-    .bets-body {
-      padding: 14px 18px;
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      align-items: stretch;
-    }
-
-    .bet-card {
-      flex: 1;
-      min-width: 200px;
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      padding: 12px 14px;
-      position: relative;
-      transition: border-color 0.2s;
-    }
-
-    .bet-card:hover { border-color: var(--border2); }
-
-    .bet-rank {
-      position: absolute;
-      top: 10px; right: 10px;
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--text-dim);
-      letter-spacing: 0.08em;
-    }
-
-    .bet-side {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-
-    .bet-side.yes { color: var(--green); }
-    .bet-side.no  { color: var(--red); }
-
-    .bet-bracket {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--text-bright);
-      margin-bottom: 10px;
-      line-height: 1.2;
-    }
-
-    .bet-amount {
-      font-size: 26px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin-bottom: 2px;
-    }
-
-    .bet-amount.yes { color: var(--green); }
-    .bet-amount.no  { color: var(--red); }
-
-    .bet-detail {
-      font-size: 11px;
-      color: var(--text-dim);
-      margin-bottom: 8px;
-    }
-
-    .bet-meta {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .bet-tag {
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-weight: 600;
-    }
-
-    .bet-tag-edge  { background: rgba(0,255,136,0.1); color: var(--green); }
-    .bet-tag-ev    { background: rgba(0,212,255,0.1); color: var(--cyan); }
-    .bet-tag-prob  { background: rgba(157,78,221,0.1); color: var(--purple); }
-
-    .no-bets-box {
-      padding: 20px 18px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: var(--text-dim);
-      font-size: 12px;
-    }
-
-    .no-bets-icon {
-      font-size: 20px;
-      opacity: 0.5;
-    }
-
-    /* ── Lock-in button ────────────────────────────────────────────────────── */
-    .lock-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 10px;
-      padding: 6px 14px;
-      border-radius: 4px;
-      font-family: var(--mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      cursor: pointer;
-      border: none;
-      transition: all 0.15s;
-    }
-
-    .lock-btn.yes {
-      background: rgba(0,255,136,0.15);
-      color: var(--green);
-      border: 1px solid rgba(0,255,136,0.3);
-    }
-
-    .lock-btn.yes:hover { background: rgba(0,255,136,0.25); }
-
-    .lock-btn.no {
-      background: rgba(255,68,102,0.12);
-      color: var(--red);
-      border: 1px solid rgba(255,68,102,0.3);
-    }
-
-    .lock-btn.no:hover { background: rgba(255,68,102,0.22); }
-
-    .lock-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-
-    .lock-btn.placed {
-      background: rgba(0,255,136,0.08);
-      color: var(--text-dim);
-      border-color: var(--border);
-      cursor: default;
-    }
-
-    .dry-badge {
-      font-size: 9px;
-      padding: 1px 5px;
-      border-radius: 2px;
-      background: rgba(255,215,0,0.15);
-      color: var(--yellow);
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      margin-left: 4px;
-    }
-
-    /* ── Baseball past bets ─────────────────────────────────────────────────── */
+    /* ── Compact summary stats (sidebar 2x2 grid) ─────────────────────────── */
     .bb-summary {
-      display: flex;
-      gap: 0;
-      background: var(--bg1);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
       border: 1px solid var(--border);
       border-radius: 6px;
       overflow: hidden;
-      margin-bottom: 24px;
+      margin-bottom: 14px;
     }
     .bb-stat {
-      flex: 1;
-      padding: 14px 18px;
-      border-right: 1px solid var(--border);
+      padding: 10px 12px;
+      background: var(--bg1);
       min-width: 0;
     }
-    .bb-stat:last-child { border-right: none; }
     .bb-stat-label {
       font-size: 9px;
       font-weight: 700;
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--text-dim);
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
     .bb-stat-val {
-      font-size: 20px;
+      font-size: 17px;
       font-weight: 700;
       letter-spacing: -0.01em;
     }
     .bb-stat-sub {
-      font-size: 10px;
+      font-size: 9px;
       color: var(--text-dim);
-      margin-top: 2px;
+      margin-top: 1px;
     }
     .bb-chart-wrap {
       background: var(--bg1);
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 16px 18px;
-      margin-bottom: 24px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
     }
     .bb-chart-label {
       font-size: 10px;
@@ -815,7 +484,7 @@
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--text-dim);
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     .bb-status {
       display: inline-block;
@@ -833,6 +502,17 @@
     .bb-pnl-pos { color: var(--green); font-weight: 700; }
     .bb-pnl-neg { color: var(--red);   font-weight: 700; }
     .bb-pnl-nil { color: var(--text-dim); }
+
+    /* ── Game card compact ─────────────────────────────────────────────────── */
+    .signal-card {
+      background: var(--bg1);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      min-width: 220px;
+      max-width: 260px;
+      padding: 6px 8px;
+      transition: opacity 0.2s, border-color 0.2s;
+    }
   </style>
 </head>
 <body>
@@ -840,16 +520,10 @@
 <!-- ── Header ──────────────────────────────────────────────────────────────── -->
 <header>
   <div class="header-left">
+    <div class="online-dot"></div>
     <div class="logo" id="logo-text">SPORTS PREDICTOR <span>v1.0</span></div>
-    <div id="mode-tag" class="tag tag-dry">DRY RUN</div>
   </div>
   <div class="header-right">
-    <div class="refresh-countdown" id="countdown-wrap" style="display:none">
-      <span id="countdown-label">refresh in --s</span>
-      <div class="countdown-bar-wrap">
-        <div class="countdown-bar" id="countdown-bar" style="width:100%"></div>
-      </div>
-    </div>
     <div class="clock">ET &nbsp;<span id="clock">--:--:--</span></div>
   </div>
 </header>
@@ -869,7 +543,7 @@
       </div>
     </div>
 
-    <div id="baseball-content" style="padding:0 24px 24px">
+    <div id="baseball-content">
       <div class="dim" style="padding:40px;text-align:center">Loading MLB games...</div>
     </div>
   </div>
@@ -1186,27 +860,28 @@ async function loadBaseball(manual = false) {
     liveBalance = data.bankroll || null;
     const betsData = await betsRes.json();
 
-    let html = '';
+    // ── Sidebar content (summary + chart + positions + past bets) ──────────
+    const sidebarHtml = renderBaseballBets(betsData, liveBalance, data.positions || []);
 
-    // ── Past Bets + PnL (uses bet log for history) ──────────────────────────
-    html += renderBaseballBets(betsData, liveBalance, data.positions || []);
+    // ── Main column content ────────────────────────────────────────────────
+    let mainHtml = '';
 
     // ── Odds key warning ─────────────────────────────────────────────────────
     if (!data.has_odds_key) {
-      html += `
+      mainHtml += `
         <div class="empty-state" style="margin-top:24px">
           <div style="color:var(--yellow);font-size:14px;margin-bottom:12px">ODDS_API_KEY not set</div>
           <div class="dim">Add your free API key from <b>the-odds-api.com</b> to Railway env vars as <b>ODDS_API_KEY</b></div>
         </div>`;
-      el.innerHTML = html;
+      el.innerHTML = `<div class="dashboard-grid"><div class="dash-main">${mainHtml}</div><div class="dash-sidebar">${sidebarHtml}</div></div>`;
       renderPnlChart(betsData, liveBalance);
       _bbStartCountdown();
       return;
     }
 
     if (data.error) {
-      html += `<div class="empty-state" style="color:var(--red)">${data.error}</div>`;
-      el.innerHTML = html;
+      mainHtml += `<div class="empty-state" style="color:var(--red)">${data.error}</div>`;
+      el.innerHTML = `<div class="dashboard-grid"><div class="dash-main">${mainHtml}</div><div class="dash-sidebar">${sidebarHtml}</div></div>`;
       renderPnlChart(betsData, liveBalance);
       _bbStartCountdown();
       return;
@@ -1229,7 +904,7 @@ async function loadBaseball(manual = false) {
       // Next-game banner
       const nextGame = upcoming[0];
       const nextBannerHtml = nextGame ? `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;margin-bottom:16px;
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;margin-bottom:12px;
                     background:rgba(0,200,255,0.06);border:1px solid rgba(0,200,255,0.15);
                     border-radius:6px;font-size:11px;color:var(--text-dim)">
           <span style="color:var(--cyan);font-size:13px">⏱</span>
@@ -1262,7 +937,7 @@ async function loadBaseball(manual = false) {
               const cardOpacity  = (hasEdge || isLive) ? '1' : '0.5';
               const borderStyle  = hasEdge ? 'border-color:rgba(0,255,136,0.5);box-shadow:0 0 12px rgba(0,255,136,0.08)'
                                  : isLive  ? 'border-color:rgba(255,60,60,0.3)'
-                                 :           'border-color:rgba(255,255,255,0.06)';
+                                 :           '';
               const homeEdgeClass = homeEdgeVal >= MIN_EDGE_DISPLAY ? 'green' : homeEdgeVal <= -MIN_EDGE_DISPLAY ? 'red' : 'dim';
               const awayEdgeClass = awayEdgeVal >= MIN_EDGE_DISPLAY ? 'green' : awayEdgeVal <= -MIN_EDGE_DISPLAY ? 'red' : 'dim';
 
@@ -1282,7 +957,7 @@ async function loadBaseball(manual = false) {
               const _posHtml = (pos, side, team) => {
                 if (!pos || !pos.quantity) return '';
                 const avgC = pos.avg_price > 1 ? Math.round(pos.avg_price) : Math.round(pos.avg_price * 100);
-                return `<div style="margin-top:4px;padding:3px 6px;background:rgba(157,78,221,0.08);
+                return `<div style="margin-top:3px;padding:2px 5px;background:rgba(157,78,221,0.08);
                                     border-radius:3px;border:1px solid rgba(157,78,221,0.2);
                                     font-size:9px;color:rgba(180,120,255,0.85)">
                   📌 ${team} · ${pos.quantity}x @ ${avgC}¢
@@ -1306,7 +981,7 @@ async function loadBaseball(manual = false) {
               });
 
               const autoBetRow = isLive
-                ? `<div style="margin-top:4px;padding:3px 6px;background:rgba(255,60,60,0.06);
+                ? `<div style="margin-top:3px;padding:2px 5px;background:rgba(255,60,60,0.06);
                               border-radius:3px;border:1px solid rgba(255,60,60,0.12);
                               font-size:9px;color:rgba(255,100,100,0.6)">
                     ● in progress
@@ -1323,7 +998,7 @@ async function loadBaseball(manual = false) {
                     // Already bet this game? (from bet log or auto-logged position)
                     if (existingBet) {
                       const eb = existingBet;
-                      return `<div style="margin-top:4px;padding:4px 6px;
+                      return `<div style="margin-top:3px;padding:3px 5px;
                                   background:rgba(0,255,136,0.05);border-radius:3px;
                                   border:1px solid rgba(0,255,136,0.2)">
                         <div style="font-size:9px;color:var(--green);font-weight:700">
@@ -1332,7 +1007,7 @@ async function loadBaseball(manual = false) {
                       </div>`;
                     }
 
-                    return `<div style="margin-top:4px;padding:4px 6px;background:rgba(0,255,136,0.07);
+                    return `<div style="margin-top:3px;padding:3px 5px;background:rgba(0,255,136,0.07);
                                 border-radius:3px;border:1px solid rgba(0,255,136,0.12)">
                       <div style="display:flex;justify-content:space-between;align-items:center">
                         <span style="font-size:9px;color:var(--green);font-weight:700">
@@ -1342,7 +1017,7 @@ async function loadBaseball(manual = false) {
                       </div>
                       <button id="${btnId}"
                         onclick="placeBaseballBet('${g.id}','${betSide}',${bestSig.contracts},${bestSig.kalshi_prob},'${betTeam}')"
-                        style="margin-top:4px;width:100%;padding:4px 0;font-family:var(--mono);
+                        style="margin-top:3px;width:100%;padding:3px 0;font-family:var(--mono);
                                font-size:10px;font-weight:700;letter-spacing:.06em;cursor:pointer;
                                background:rgba(0,255,136,0.1);color:var(--green);
                                border:1px solid rgba(0,255,136,0.3);border-radius:3px;">
@@ -1350,37 +1025,36 @@ async function loadBaseball(manual = false) {
                       </button>
                     </div>`;
                   })()
-                : `<div style="margin-top:4px;font-size:8px;color:rgba(255,255,255,0.15);padding:2px 4px">
+                : `<div style="margin-top:3px;font-size:8px;color:rgba(255,255,255,0.15);padding:1px 4px">
                     — no edge
                    </div>`;
 
               return `
-                <div class="signal-card" style="min-width:240px;max-width:280px;padding:8px 10px;opacity:${cardOpacity};
-                     transition:opacity .2s;${borderStyle}">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <div class="signal-card" style="opacity:${cardOpacity};${borderStyle}">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
                     <span class="dim" style="font-size:9px">${minsLabel}</span>
                     ${statusBadge}
                   </div>
-                  <div style="margin-bottom:6px">
-                    <span style="font-size:12px;font-weight:700;color:var(--text-bright)">${g.away}</span>
+                  <div style="margin-bottom:4px">
+                    <span style="font-size:11px;font-weight:700;color:var(--text-bright)">${g.away}</span>
                     ${_recordBadge(_record(standings, g.away))}
-                    <span style="font-size:10px;color:var(--text-dim);margin:0 3px">@</span>
-                    <span style="font-size:12px;font-weight:700;color:var(--text-bright)">${g.home}</span>
+                    <span style="font-size:10px;color:var(--text-dim);margin:0 2px">@</span>
+                    <span style="font-size:11px;font-weight:700;color:var(--text-bright)">${g.home}</span>
                     ${_recordBadge(_record(standings, g.home))}
                   </div>
-                  <div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:2px;font-size:10px">
+                  <div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:1px;font-size:10px">
                     <div></div>
                     <div style="text-align:center;color:var(--text-dim);font-size:8px;letter-spacing:.05em">VEGAS</div>
                     <div style="text-align:center;color:var(--text-dim);font-size:8px;letter-spacing:.05em">KALSHI</div>
                     <div style="text-align:center;color:var(--text-dim);font-size:8px;letter-spacing:.05em">EDGE</div>
-                    <div style="color:var(--text-dim);font-size:8px;padding:2px 4px">HOME</div>
-                    <div style="text-align:center;font-weight:700;color:var(--cyan);padding:2px 0">${g.home_prob}%</div>
-                    <div style="text-align:center;font-weight:700;color:var(--text);padding:2px 0">${g.home_kalshi}%</div>
-                    <div class="${homeEdgeClass}" style="text-align:center;font-weight:700;padding:2px 0">${homeEdgeVal >= 0 ? '+' : ''}${homeEdgeVal}c</div>
-                    <div style="color:var(--text-dim);font-size:8px;padding:2px 4px">AWAY</div>
-                    <div style="text-align:center;font-weight:700;color:var(--cyan);padding:2px 0">${g.away_prob}%</div>
-                    <div style="text-align:center;font-weight:700;color:var(--text);padding:2px 0">${g.away_kalshi}%</div>
-                    <div class="${awayEdgeClass}" style="text-align:center;font-weight:700;padding:2px 0">${awayEdgeVal >= 0 ? '+' : ''}${awayEdgeVal}c</div>
+                    <div style="color:var(--text-dim);font-size:8px;padding:1px 4px">HOME</div>
+                    <div style="text-align:center;font-weight:700;color:var(--cyan);padding:1px 0">${g.home_prob}%</div>
+                    <div style="text-align:center;font-weight:700;color:var(--text);padding:1px 0">${g.home_kalshi}%</div>
+                    <div class="${homeEdgeClass}" style="text-align:center;font-weight:700;padding:1px 0">${homeEdgeVal >= 0 ? '+' : ''}${homeEdgeVal}c</div>
+                    <div style="color:var(--text-dim);font-size:8px;padding:1px 4px">AWAY</div>
+                    <div style="text-align:center;font-weight:700;color:var(--cyan);padding:1px 0">${g.away_prob}%</div>
+                    <div style="text-align:center;font-weight:700;color:var(--text);padding:1px 0">${g.away_kalshi}%</div>
+                    <div class="${awayEdgeClass}" style="text-align:center;font-weight:700;padding:1px 0">${awayEdgeVal >= 0 ? '+' : ''}${awayEdgeVal}c</div>
                   </div>
                   ${posRow}
                   ${autoBetRow}
@@ -1409,8 +1083,8 @@ async function loadBaseball(manual = false) {
         ).length;
 
         let s = `
-          <div style="margin-bottom:28px">
-            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px;
+          <div style="margin-bottom:24px">
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;
                         padding-bottom:6px;border-bottom:1px solid var(--border)">
               <div class="panel-label" style="margin:0">${label}</div>
               <span class="dim" style="font-size:10px">${subLabel}</span>
@@ -1419,7 +1093,7 @@ async function loadBaseball(manual = false) {
 
         // Live/in-progress games — show with MLB live scores
         if (liveInSection.length) {
-          s += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+          s += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
             ${liveInSection.map(g => {
               const sc    = _scoreKey(mlbScores, g.away, g.home);
               const done  = sc && sc.done;
@@ -1439,15 +1113,15 @@ async function loadBaseball(manual = false) {
                 : null;
               return `
               <div data-live-game="1" data-away="${g.away}" data-home="${g.home}"
-                   style="padding:8px 14px;background:${bg};border:1px solid ${bd};
-                          border-radius:6px;font-size:11px;min-width:220px">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                   style="padding:6px 10px;background:${bg};border:1px solid ${bd};
+                          border-radius:6px;font-size:11px;min-width:200px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
                   ${badge}
                   <span class="live-situ dim" style="font-size:9px">${situStr}</span>
                 </div>
-                <div style="color:var(--text-bright);font-weight:600;margin-bottom:2px">${g.away} @ ${g.home}</div>
+                <div style="color:var(--text-bright);font-weight:600;margin-bottom:2px;font-size:11px">${g.away} @ ${g.home}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center">
-                  <span class="live-score" style="font-size:16px;font-weight:700;
+                  <span class="live-score" style="font-size:15px;font-weight:700;
                                color:${done ? 'var(--cyan)' : 'var(--text)'};
                                font-variant-numeric:tabular-nums">${scoreStr}</span>
                   <span class="live-winner" style="font-size:10px;color:var(--green);
@@ -1460,7 +1134,7 @@ async function loadBaseball(manual = false) {
 
         // Upcoming game cards
         if (upcomingInSection.length) {
-          s += `<div style="display:flex;flex-wrap:wrap;gap:12px">
+          s += `<div style="display:flex;flex-wrap:wrap;gap:8px">
             ${upcomingInSection.map(renderGameCard).join('')}
           </div>`;
         }
@@ -1497,16 +1171,20 @@ async function loadBaseball(manual = false) {
         <span style="font-size:9px;color:var(--text-dim)">refreshes every 60s</span>
       </div>`;
 
-      html += `<div style="margin-bottom:16px">
-        ${nextBannerHtml}
-        ${scanNote}
+      mainHtml += scanNote;
+      mainHtml += nextBannerHtml;
+
+      mainHtml += `<div style="margin-bottom:12px">
         <div class="panel-label" style="margin-bottom:4px">
           SIGNALS &nbsp;<span class="dim" style="font-size:10px">edge > 4¢ highlighted · sorted by first pitch</span>
           ${sigCount ? `<span style="margin-left:8px;font-size:10px;color:var(--green)">${sigCount} signal${sigCount>1?'s':''}</span>` : ''}
         </div>
       </div>`;
 
-      // ── RESULTS: completed games (today + yesterday) — shown FIRST ──────────
+      // Only show today's games
+      mainHtml += renderSection(todayGames, 'GAMES', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'America/Chicago'}));
+
+      // ── RESULTS: completed games (today + yesterday) ──────────────────────
       const completedGames = Object.values(mlbScores).filter(sc => sc.done && sc.awayScore !== null);
       const todayStr = new Date().toLocaleDateString('en-CA', {timeZone:'America/Chicago'});
       const ydayStr  = new Date(Date.now() - 864e5).toLocaleDateString('en-CA', {timeZone:'America/Chicago'});
@@ -1520,7 +1198,7 @@ async function loadBaseball(manual = false) {
         }
         const dateGroups = Object.keys(byDate).sort().reverse(); // newest first
 
-        html += `
+        mainHtml += `
           <div style="margin-bottom:24px">
             <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;
                         padding-bottom:6px;border-bottom:1px solid var(--border)">
@@ -1585,43 +1263,17 @@ async function loadBaseball(manual = false) {
             }).join('')}
           </div>`;
       } else {
-        html += `
+        mainHtml += `
           <div style="margin-bottom:24px;padding:12px 16px;background:rgba(255,255,255,0.02);
                       border:1px solid var(--border);border-radius:6px">
             <div class="panel-label" style="margin-bottom:6px">RESULTS</div>
             <div class="dim" style="font-size:11px">No completed games yet — check back after the first games finish tonight.</div>
           </div>`;
       }
-
-      // Only show today's games
-      html += renderSection(todayGames, 'GAMES', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
-
-      /* ── removed old flat games block ── */
-      if (false) { // placeholder to keep block structure intact
-        const liveGames = [];
-        html += `
-          <div>
-            <table style="width:100%;border-collapse:collapse;font-size:11px">
-              <thead><tr><th></th></tr></thead>
-              <tbody>
-                ${liveGames.map(g => `
-                  <tr>
-                    <td>${g.away} @ ${g.home}</td>
-                    <td style="padding:7px 8px;text-align:right;color:var(--cyan)">${g.home_prob}%</td>
-                    <td style="padding:7px 8px;text-align:right;color:var(--text)">${g.home_kalshi}%</td>
-                    <td style="padding:7px 8px;text-align:right;color:var(--cyan)">${g.away_prob}%</td>
-                    <td style="padding:7px 8px;text-align:right;color:var(--text)">${g.away_kalshi}%</td>
-                    <td style="padding:7px 8px;text-align:center">
-                      <span style="color:var(--red);font-weight:600;font-size:10px">● LIVE</span>
-                    </td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>`;
-      }
     }
 
-    el.innerHTML = html;
+    // ── Compose two-column layout ───────────────────────────────────────────
+    el.innerHTML = `<div class="dashboard-grid"><div class="dash-main">${mainHtml}</div><div class="dash-sidebar">${sidebarHtml}</div></div>`;
     renderPnlChart(betsData, liveBalance);
     // Start countdowns AFTER DOM is updated so elements exist
     if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].mins_to_game);
@@ -1751,7 +1403,7 @@ function renderBaseballBets(betsData, liveBalance, livePositions) {
         <div class="bb-stat-sub">started $${startingBalance.toFixed(2)}</div>
       </div>
       <div class="bb-stat">
-        <div class="bb-stat-label">Total P&amp;L</div>
+        <div class="bb-stat-label">P&amp;L</div>
         <div class="bb-stat-val ${pnlClass}">${pnlSign}$${Math.abs(pnl).toFixed(2)}</div>
         <div class="bb-stat-sub">wagered $${(s.total_wagered || 0).toFixed(2)}</div>
       </div>
@@ -1761,7 +1413,7 @@ function renderBaseballBets(betsData, liveBalance, livePositions) {
         <div class="bb-stat-sub">${s.pending || 0} pending</div>
       </div>
       <div class="bb-stat">
-        <div class="bb-stat-label">Win Rate</div>
+        <div class="bb-stat-label">Win %</div>
         <div class="bb-stat-val" style="color:${winRate >= 55 ? 'var(--green)' : winRate >= 45 ? 'var(--yellow)' : 'var(--red)'}">${winRate}%</div>
         <div class="bb-stat-sub">${(s.wins||0) + (s.losses||0)} resolved</div>
       </div>
@@ -1771,7 +1423,7 @@ function renderBaseballBets(betsData, liveBalance, livePositions) {
   html += `
     <div class="bb-chart-wrap">
       <div class="bb-chart-label">Bankroll curve</div>
-      <canvas id="bb-pnl-chart" height="80"></canvas>
+      <canvas id="bb-pnl-chart" height="70"></canvas>
     </div>`;
 
   // Split into pending (current positions) vs resolved (history includes canceled)
@@ -1782,18 +1434,18 @@ function renderBaseballBets(betsData, liveBalance, livePositions) {
   // Use LIVE Kalshi positions (source of truth), not bet log
   if (livePositions.length) {
     html += `
-      <div class="panel-label" style="margin-bottom:8px">
+      <div class="panel-label" style="margin-bottom:6px">
         OPEN POSITIONS &nbsp;<span class="bb-status bb-status-pending" style="vertical-align:middle">${livePositions.length}</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">
         ${livePositions.map(p => `
-            <div style="padding:6px 8px;background:var(--bg2);border:1px solid rgba(255,215,0,0.15);border-radius:4px">
+            <div style="padding:5px 7px;background:var(--bg2);border:1px solid rgba(255,215,0,0.15);border-radius:4px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
                 <span style="font-size:11px;font-weight:700;color:var(--text-bright)">${p.team}</span>
                 <span class="bb-status bb-status-pending" style="font-size:8px">live</span>
               </div>
-              <div class="dim" style="font-size:9px;margin-bottom:4px">${p.away} @ ${p.home}</div>
-              <div style="display:flex;gap:10px;font-size:9px">
+              <div class="dim" style="font-size:9px;margin-bottom:3px">${p.away} @ ${p.home}</div>
+              <div style="display:flex;gap:8px;font-size:9px">
                 <span>${p.quantity}x @ ${p.avg_price}¢</span>
                 <span style="color:var(--yellow)">cost $${p.cost.toFixed(2)}</span>
                 <span style="color:var(--green)">win +$${p.to_win.toFixed(2)}</span>
@@ -1803,21 +1455,21 @@ function renderBaseballBets(betsData, liveBalance, livePositions) {
   } else if (pending.length) {
     // Fallback: show pending bets from log if Kalshi positions unavailable
     html += `
-      <div class="panel-label" style="margin-bottom:8px">
+      <div class="panel-label" style="margin-bottom:6px">
         PENDING BETS &nbsp;<span class="bb-status bb-status-pending" style="vertical-align:middle">${pending.length}</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">
         ${pending.map(b => {
           const cost = (b.contracts * b.price_cents / 100).toFixed(2);
           const potW = (b.contracts * (100 - b.price_cents) / 100).toFixed(2);
           return `
-            <div style="padding:6px 8px;background:var(--bg2);border:1px solid rgba(255,215,0,0.15);border-radius:4px">
+            <div style="padding:5px 7px;background:var(--bg2);border:1px solid rgba(255,215,0,0.15);border-radius:4px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
                 <span style="font-size:11px;font-weight:700;color:var(--text-bright)">${b.team}</span>
                 <span class="bb-status bb-status-pending" style="font-size:8px">pending</span>
               </div>
-              <div class="dim" style="font-size:9px;margin-bottom:4px">${b.away} @ ${b.home}</div>
-              <div style="display:flex;gap:10px;font-size:9px">
+              <div class="dim" style="font-size:9px;margin-bottom:3px">${b.away} @ ${b.home}</div>
+              <div style="display:flex;gap:8px;font-size:9px">
                 <span>${b.contracts}x @ ${b.price_cents}¢</span>
                 <span style="color:var(--yellow)">risk $${cost}</span>
                 <span style="color:var(--green)">win +$${potW}</span>
@@ -1830,10 +1482,10 @@ function renderBaseballBets(betsData, liveBalance, livePositions) {
   // ── Past Bets history table ───────────────────────────────────────────────
   if (resolved.length) {
     html += `
-      <div class="panel-label" style="margin-bottom:12px">
-        PAST BETS &nbsp;<span class="dim" style="font-size:10px">all historical bets · auto-resolved via MLB Stats API</span>
+      <div class="panel-label" style="margin-bottom:8px">
+        PAST BETS &nbsp;<span class="dim" style="font-size:10px">auto-resolved via MLB Stats API</span>
       </div>
-      <div class="table-wrap" style="margin-bottom:24px">
+      <div class="table-wrap" style="margin-bottom:14px">
         <table>
           <thead>
             <tr>
@@ -1868,7 +1520,7 @@ function renderBaseballBets(betsData, liveBalance, livePositions) {
 
   if (!bets.length) {
     html += `
-      <div style="color:var(--text-dim);font-size:12px;margin-bottom:24px;padding:16px 0">
+      <div style="color:var(--text-dim);font-size:11px;margin-bottom:14px;padding:12px 0">
         No bets placed yet — hit PLACE BET on a signal to start tracking.
       </div>`;
   }
@@ -1934,8 +1586,8 @@ function renderPnlChart(betsData, liveBalance) {
           callbacks: {
             label: ctx => `$${ctx.parsed.y.toFixed(2)}`,
           },
-          backgroundColor: '#0d1117',
-          borderColor: '#1e2d3d',
+          backgroundColor: '#0a0a0f',
+          borderColor: '#1a1a25',
           borderWidth: 1,
           titleColor: '#c9d1d9',
           bodyColor: '#00ff88',
@@ -1944,7 +1596,7 @@ function renderPnlChart(betsData, liveBalance) {
       scales: {
         x: {
           ticks: { color: '#6e7681', font: { family: 'JetBrains Mono', size: 10 } },
-          grid:  { color: 'rgba(30,45,61,0.5)' },
+          grid:  { color: 'rgba(26,26,37,0.5)' },
         },
         y: {
           suggestedMin: minVal - pad,
@@ -1954,7 +1606,7 @@ function renderPnlChart(betsData, liveBalance) {
             font: { family: 'JetBrains Mono', size: 10 },
             callback: v => '$' + v.toFixed(2),
           },
-          grid: { color: 'rgba(30,45,61,0.5)' },
+          grid: { color: 'rgba(26,26,37,0.5)' },
         }
       }
     }
@@ -1983,33 +1635,6 @@ async function bbPlaceBet(btn, ticker, home, away, team, side, contracts, priceC
 }
 
 // loadTradeLog removed — no trade log page
-
-// ── Auto-refresh countdown (5 min) ────────────────────────────────────────
-const REFRESH_SECS = 300;
-let _countdown = REFRESH_SECS;
-let _countdownActive = false;
-
-function startCountdown() {
-  _countdown = REFRESH_SECS;
-  _countdownActive = true;
-  document.getElementById('countdown-wrap').style.display = 'flex';
-}
-
-function tickCountdown() {
-  if (!_countdownActive) return;
-  _countdown--;
-  const pct = (_countdown / REFRESH_SECS) * 100;
-  document.getElementById('countdown-bar').style.width = pct + '%';
-  document.getElementById('countdown-label').textContent =
-    'refresh in ' + _countdown + 's';
-
-  if (_countdown <= 0) {
-    _countdownActive = false;
-    // no-op: auto-refresh handled by baseball's own _bbStartCountdown
-    _countdownActive = false;
-  }
-}
-setInterval(tickCountdown, 1000);
 
 // ── Card flash on data update ──────────────────────────────────────────────
 function flashEl(id) {
