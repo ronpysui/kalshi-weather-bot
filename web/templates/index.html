@@ -1536,49 +1536,109 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores) {
       </div>`;
   }
 
-  // ── Past Bets history table ───────────────────────────────────────────────
-  if (resolved.length) {
+  // ── BET RESULTS — all bets (active + resolved) with live scores + P&L ─────
+  const allBetsForResults = [...bets];
+  // Also include live positions that might not be in the bet log yet
+  for (const pos of livePositions) {
+    const already = allBetsForResults.find(b => b.ticker === pos.ticker);
+    if (!already) {
+      allBetsForResults.push({
+        team: pos.team, home: pos.home, away: pos.away,
+        contracts: pos.quantity, price_cents: pos.avg_price,
+        side: pos.side, ticker: pos.ticker,
+        vegas_prob: '—', edge: '—', status: 'pending',
+        timestamp: new Date().toISOString(), _fromPosition: true,
+      });
+    }
+  }
+
+  if (allBetsForResults.length) {
+    // Separate active (pending) from resolved
+    const activeBets = allBetsForResults.filter(b => b.status === 'pending');
+    const resolvedBets = allBetsForResults.filter(b => b.status !== 'pending');
+    const totalPnl = resolvedBets.reduce((sum, b) => sum + (b.pnl || 0), 0);
+
     html += `
       <div class="panel-label" style="margin-bottom:8px">
-        PAST BETS &nbsp;<span class="dim" style="font-size:10px">auto-resolved via MLB Stats API</span>
-      </div>
+        BET RESULTS &nbsp;
+        <span class="dim" style="font-size:10px">${activeBets.length} active · ${resolvedBets.length} resolved</span>
+        ${resolvedBets.length ? `<span style="margin-left:8px;font-size:10px;font-weight:700;color:${totalPnl >= 0 ? 'var(--green)' : 'var(--red)'}">
+          ${totalPnl >= 0 ? '+' : ''}$${Math.abs(totalPnl).toFixed(2)}
+        </span>` : ''}
+      </div>`;
+
+    // ── Active bets with live scores ──────────────────────────────────────
+    if (activeBets.length) {
+      html += `<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px">
+        ${activeBets.map(b => {
+          const sc = _scoreKey(mlbScores, b.away, b.home);
+          const cost = (b.contracts * b.price_cents / 100).toFixed(2);
+          const potWin = (b.contracts * (100 - b.price_cents) / 100).toFixed(2);
+          const gameStarted = sc && (sc.inProgress || sc.done);
+          const scoreStr = sc && sc.awayScore !== null ? `${sc.awayScore} – ${sc.homeScore}` : '';
+          const situStr = sc && sc.done ? 'Final'
+            : sc && sc.inning ? `${sc.half === 'Bottom' ? '▼' : '▲'}${sc.inning}`
+            : sc && sc.inProgress ? 'Live' : '';
+
+          return `
+          <div style="padding:5px 7px;background:var(--bg2);border:1px solid rgba(0,212,255,0.12);border-radius:4px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+              <span style="font-size:10px;font-weight:700;color:var(--text-bright)">${b.team} YES</span>
+              ${gameStarted
+                ? `<span style="font-size:9px;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums">
+                    ${scoreStr} <span class="dim" style="font-size:8px">${situStr}</span></span>`
+                : `<span style="font-size:8px;color:var(--cyan)">⏱ waiting</span>`}
+            </div>
+            <div class="dim" style="font-size:8px;margin-bottom:2px">${b.away} @ ${b.home}</div>
+            <div style="display:flex;gap:6px;font-size:9px">
+              <span>${b.contracts}x @ ${b.price_cents}¢</span>
+              <span style="color:var(--yellow)">risk $${cost}</span>
+              <span style="color:var(--green)">win +$${potWin}</span>
+              ${b.edge !== '—' ? `<span class="dim">edge +${b.edge}c</span>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+
+    // ── Resolved bets table ───────────────────────────────────────────────
+    if (resolvedBets.length) {
+      html += `
       <div class="table-wrap" style="margin-bottom:14px">
-        <table>
+        <table style="font-size:10px">
           <thead>
             <tr>
-              <th>DATE</th><th>MATCHUP</th><th>BET ON</th><th>SIDE</th>
-              <th>CONTRACTS</th><th>PRICE</th><th>VEGAS</th><th>EDGE</th>
-              <th>STATUS</th><th>P&amp;L</th>
+              <th style="text-align:left">DATE</th>
+              <th style="text-align:left">BET</th>
+              <th>PRICE</th><th>EDGE</th>
+              <th>RESULT</th><th>P&amp;L</th>
             </tr>
           </thead>
           <tbody>
-            ${resolved.map(b => {
+            ${resolvedBets.map(b => {
               const dt  = new Date(b.timestamp).toLocaleDateString('en-US', {month:'short',day:'numeric'});
-              const pnl = b.pnl != null
-                ? `<span class="${b.pnl >= 0 ? 'bb-pnl-pos' : 'bb-pnl-neg'}">${b.pnl >= 0 ? '+' : ''}$${Math.abs(b.pnl).toFixed(2)}</span>`
+              const pnlVal = b.pnl || 0;
+              const pnlHtml = b.pnl != null
+                ? `<span class="${pnlVal >= 0 ? 'bb-pnl-pos' : 'bb-pnl-neg'}">${pnlVal >= 0 ? '+' : ''}$${Math.abs(pnlVal).toFixed(2)}</span>`
                 : '<span class="bb-pnl-nil">–</span>';
-              return `<tr>
+              const statusColor = b.status === 'won' ? 'var(--green)' : b.status === 'lost' ? 'var(--red)' : 'var(--text-dim)';
+              return `<tr style="border-left:2px solid ${statusColor}">
                 <td class="dim">${dt}</td>
-                <td>${b.away} @ ${b.home}</td>
-                <td style="font-weight:600;color:var(--text-bright)">${b.team}</td>
-                <td class="${b.side === 'home' ? 'green' : 'cyan'}">${b.side.toUpperCase()}</td>
-                <td>${b.contracts}</td>
+                <td style="color:var(--text-bright);font-weight:600">${b.team} <span class="dim" style="font-weight:400">${b.contracts}x</span></td>
                 <td class="dim">${b.price_cents}¢</td>
-                <td class="cyan">${b.vegas_prob}%</td>
-                <td class="green">+${b.edge}c</td>
-                <td><span class="bb-status bb-status-${b.status}">${b.status}</span></td>
-                <td>${pnl}</td>
+                <td class="green">${b.edge !== '—' ? '+' + b.edge + 'c' : '—'}</td>
+                <td><span style="font-size:9px;font-weight:700;color:${statusColor};text-transform:uppercase">${b.status}</span></td>
+                <td>${pnlHtml}</td>
               </tr>`;
             }).join('')}
           </tbody>
         </table>
       </div>`;
-  }
-
-  if (!bets.length) {
+    }
+  } else {
     html += `
       <div style="color:var(--text-dim);font-size:11px;margin-bottom:14px;padding:12px 0">
-        No bets placed yet — hit PLACE BET on a signal to start tracking.
+        No bets placed yet — bot will auto-bet when edge is found.
       </div>`;
   }
 
