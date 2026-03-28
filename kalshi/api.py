@@ -220,27 +220,25 @@ def get_open_positions() -> dict:
     """
     try:
         data = _get("/portfolio/positions", params={"limit": 1000}, auth=True)
-        # Kalshi returns market_positions or positions depending on API version
+        # Kalshi returns market_positions; field names use _fp (fixed-point) and _dollars suffixes
         positions = data.get("market_positions", data.get("positions", []))
         result = {}
         for p in positions:
             ticker = p.get("ticker", "")
-            qty    = p.get("position", p.get("quantity", 0))
-            if not ticker or not qty or qty == 0:
+            # position_fp is a string like "4.00"
+            qty = float(p.get("position_fp", p.get("position", p.get("quantity", 0))) or 0)
+            if not ticker or qty == 0:
                 continue
-            # avg price per contract = total_traded (cents) / contracts
-            # total_traded is total $ spent in cents; market_exposure is net P&L exposure
-            exposure = p.get("market_exposure", 0)
-            total_traded = p.get("total_traded", 0)
-            if total_traded and abs(qty) > 0:
-                avg = abs(total_traded) / abs(qty)   # cents per contract
-            elif exposure and abs(qty) > 0:
-                avg = abs(exposure) / abs(qty)
+            # market_exposure_dollars = cost paid in dollars (e.g. 1.68)
+            # avg price in cents = (exposure_dollars / contracts) * 100
+            exposure_dollars = abs(float(p.get("market_exposure_dollars", p.get("market_exposure", 0)) or 0))
+            if exposure_dollars and qty > 0:
+                avg = (exposure_dollars / qty) * 100   # cents per contract
             else:
                 avg = 0
             result[ticker] = {
-                "quantity":  qty,
-                "avg_price": round(avg, 1),  # cents e.g. 40.0
+                "quantity":  int(qty),
+                "avg_price": round(avg, 1),  # cents e.g. 42.0
             }
         return result
     except Exception as e:
