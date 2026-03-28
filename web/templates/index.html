@@ -2006,12 +2006,10 @@ async function loadBaseball(manual = false) {
               const _posHtml = (pos, side, team) => {
                 if (!pos || !pos.quantity) return '';
                 const avgC = pos.avg_price > 1 ? Math.round(pos.avg_price) : Math.round(pos.avg_price * 100);
-                const currVal = pos.current_value_cents ? `· worth ${pos.current_value_cents}¢` : '';
-                return `<div style="margin-top:6px;padding:6px 10px;background:rgba(157,78,221,0.08);
-                                    border-radius:4px;border:1px solid rgba(157,78,221,0.25);
-                                    font-size:10px;color:rgba(180,120,255,0.9)">
-                  📌 <b>${team}</b> YES · ${pos.quantity} contracts @ ${avgC}¢ ${currVal}
-                  <span style="font-size:9px;color:rgba(255,255,255,0.25);margin-left:4px">${side}</span>
+                return `<div style="margin-top:4px;padding:3px 6px;background:rgba(157,78,221,0.08);
+                                    border-radius:3px;border:1px solid rgba(157,78,221,0.2);
+                                    font-size:9px;color:rgba(180,120,255,0.85)">
+                  📌 ${team} · ${pos.quantity}x @ ${avgC}¢
                 </div>`;
               };
               const posRow = _posHtml(homePos, 'HOME', g.home) + _posHtml(awayPos, 'AWAY', g.away);
@@ -2031,10 +2029,10 @@ async function loadBaseball(manual = false) {
               });
 
               const autoBetRow = isLive
-                ? `<div style="margin-top:10px;padding:6px 8px;background:rgba(255,60,60,0.06);
-                              border-radius:4px;border:1px solid rgba(255,60,60,0.15);
-                              font-size:10px;color:rgba(255,100,100,0.7)">
-                    ● in progress · betting window closed
+                ? `<div style="margin-top:4px;padding:3px 6px;background:rgba(255,60,60,0.06);
+                              border-radius:3px;border:1px solid rgba(255,60,60,0.12);
+                              font-size:9px;color:rgba(255,100,100,0.6)">
+                    ● in progress
                    </div>`
                 : hasEdge && bestSig
                 ? (() => {
@@ -2045,129 +2043,67 @@ async function loadBaseball(manual = false) {
                     const betTeam = bestSig.team || (betSide === 'home' ? g.home : g.away);
                     const btnId   = `bet-btn-${g.id}-${betSide}`;
 
-                    // Already bet this game? (from bet log)
+                    // Already bet this game? (from bet log or auto-logged position)
                     if (existingBet) {
                       const eb = existingBet;
-                      return `<div style="margin-top:10px;padding:8px 10px;
-                                  background:rgba(0,255,136,0.05);border-radius:4px;
-                                  border:1px solid rgba(0,255,136,0.25)">
-                        <div style="font-size:10px;color:var(--green);font-weight:700;margin-bottom:4px">
-                          ✓ BET PLACED · ${eb.team || eb.team_bet_on || betTeam}
-                        </div>
-                        <div style="font-size:9px;color:rgba(0,255,136,0.6)">
-                          ${eb.contracts} contracts @ ${eb.price_cents}¢ · risk $${(eb.contracts * eb.price_cents / 100).toFixed(2)}
-                        </div>
-                        <div style="font-size:9px;color:rgba(255,255,255,0.25);margin-top:3px">
-                          Bot already placed this bet — no action needed
+                      return `<div style="margin-top:4px;padding:4px 6px;
+                                  background:rgba(0,255,136,0.05);border-radius:3px;
+                                  border:1px solid rgba(0,255,136,0.2)">
+                        <div style="font-size:9px;color:var(--green);font-weight:700">
+                          ✓ BET PLACED · ${eb.team || eb.team_bet_on || betTeam} · ${eb.contracts}x @ ${eb.price_cents}¢
                         </div>
                       </div>`;
                     }
 
-                    // Position exists on Kalshi but not yet in bet log → offer to log it
-                    const existingPos = betSide === 'home' ? homePos : awayPos;
-                    if (existingPos && existingPos.quantity > 0) {
-                      const posAvg = existingPos.avg_price > 1 ? Math.round(existingPos.avg_price) : Math.round(existingPos.avg_price * 100);
-                      const gDate  = new Date(g.commence).toLocaleDateString('en-CA', {timeZone: TZ});
-                      return `<div style="margin-top:10px;padding:8px 10px;
-                                  background:rgba(157,78,221,0.07);border-radius:4px;
-                                  border:1px solid rgba(157,78,221,0.3)">
-                        <div style="font-size:10px;color:rgba(180,120,255,0.9);font-weight:700;margin-bottom:4px">
-                          📌 POSITION EXISTS · ${betTeam} YES · ${existingPos.quantity}x @ ${posAvg}¢
-                        </div>
-                        <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:6px">
-                          Already on Kalshi — log it to track P&L
-                        </div>
-                        <button onclick="logExistingBet(this,'${g.id}','${betSide}',${existingPos.quantity},${posAvg},'${betTeam}','${g.home}','${g.away}','${gDate}',${bestSig.vegas_prob},${bestSig.edge},'${betSide === 'home' ? homeTicker : awayTicker}')"
-                          style="width:100%;padding:6px 0;font-family:var(--mono);font-size:11px;font-weight:700;
-                                 letter-spacing:.06em;cursor:pointer;background:rgba(157,78,221,0.12);
-                                 color:rgba(180,120,255,0.9);border:1px solid rgba(157,78,221,0.4);border-radius:4px;">
-                          LOG EXISTING BET
-                        </button>
-                      </div>`;
-                    }
-
-                    const botNote = botOpen
-                      ? `<div style="font-size:9px;color:rgba(255,255,255,0.2);margin-top:4px">
-                           Bot will auto-place this on Railway
-                         </div>`
-                      : `<div style="font-size:9px;color:rgba(255,215,0,0.5);margin-top:4px">
-                           Bot window closed · place manually now
-                         </div>`;
-                    return `<div style="margin-top:10px;padding:8px 10px;background:rgba(0,255,136,0.07);
-                                border-radius:4px;border:1px solid rgba(0,255,136,0.15)">
+                    return `<div style="margin-top:4px;padding:4px 6px;background:rgba(0,255,136,0.07);
+                                border-radius:3px;border:1px solid rgba(0,255,136,0.12)">
                       <div style="display:flex;justify-content:space-between;align-items:center">
-                        <span style="font-size:10px;color:var(--green);font-weight:700">
-                          ▶ ${betTeam.toUpperCase()} YES · ${bestSig.contracts}x @ ${bestSig.kalshi_prob}¢
+                        <span style="font-size:9px;color:var(--green);font-weight:700">
+                          ▶ ${betTeam.toUpperCase()} · ${bestSig.contracts}x @ ${bestSig.kalshi_prob}¢ · $${bestSig.risk}
                         </span>
-                        <span style="font-size:13px;font-weight:700;color:${roiC}">${roiN}x</span>
+                        <span style="font-size:11px;font-weight:700;color:${roiC}">${roiN}x</span>
                       </div>
-                      <div style="font-size:9px;color:rgba(0,255,136,0.6);margin-top:3px">
-                        risk $${bestSig.risk} &nbsp;·&nbsp; payout $${(bestSig.risk * roiN).toFixed(2)} if win
-                      </div>
-                      ${botNote}
                       <button id="${btnId}"
                         onclick="placeBaseballBet('${g.id}','${betSide}',${bestSig.contracts},${bestSig.kalshi_prob},'${betTeam}')"
-                        style="margin-top:8px;width:100%;padding:6px 0;font-family:var(--mono);
-                               font-size:11px;font-weight:700;letter-spacing:.06em;cursor:pointer;
-                               background:rgba(0,255,136,0.12);color:var(--green);
-                               border:1px solid rgba(0,255,136,0.35);border-radius:4px;">
+                        style="margin-top:4px;width:100%;padding:4px 0;font-family:var(--mono);
+                               font-size:10px;font-weight:700;letter-spacing:.06em;cursor:pointer;
+                               background:rgba(0,255,136,0.1);color:var(--green);
+                               border:1px solid rgba(0,255,136,0.3);border-radius:3px;">
                         BET ${betTeam.toUpperCase()} YES
                       </button>
                     </div>`;
                   })()
-                : `<div style="margin-top:10px;padding:6px 8px;background:rgba(255,255,255,0.03);
-                              border-radius:4px;border:1px solid rgba(255,255,255,0.06);
-                              font-size:10px;color:rgba(255,255,255,0.2)">
-                    — no edge · bot will skip this game
+                : `<div style="margin-top:4px;font-size:8px;color:rgba(255,255,255,0.15);padding:2px 4px">
+                    — no edge
                    </div>`;
 
               return `
-                <div class="signal-card" style="min-width:270px;max-width:310px;opacity:${cardOpacity};
+                <div class="signal-card" style="min-width:240px;max-width:280px;padding:8px 10px;opacity:${cardOpacity};
                      transition:opacity .2s;${borderStyle}">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                    <span class="dim" style="font-size:10px">${minsLabel}</span>
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span class="dim" style="font-size:9px">${minsLabel}</span>
                     ${statusBadge}
                   </div>
-                  <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:1px">
-                    <span style="font-size:14px;font-weight:700;color:var(--text-bright)">${g.away}</span>
+                  <div style="margin-bottom:6px">
+                    <span style="font-size:12px;font-weight:700;color:var(--text-bright)">${g.away}</span>
                     ${_recordBadge(_record(standings, g.away))}
-                  </div>
-                  <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px">
-                    <span style="font-size:11px;color:var(--text-dim)">@ ${g.home}</span>
+                    <span style="font-size:10px;color:var(--text-dim);margin:0 3px">@</span>
+                    <span style="font-size:12px;font-weight:700;color:var(--text-bright)">${g.home}</span>
                     ${_recordBadge(_record(standings, g.home))}
                   </div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;margin-bottom:3px">
-                    <div style="font-size:9px;color:var(--text-dim);text-align:center;letter-spacing:.08em">VEGAS</div>
-                    <div style="font-size:9px;color:var(--text-dim);text-align:center;letter-spacing:.08em">KALSHI</div>
-                    <div style="font-size:9px;color:var(--text-dim);text-align:center;letter-spacing:.08em">EDGE</div>
-                  </div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:3px">
-                    <div style="background:var(--bg3);padding:5px 4px;border-radius:4px;text-align:center">
-                      <div style="font-size:8px;color:var(--text-dim);margin-bottom:2px">HOME</div>
-                      <div style="font-size:13px;font-weight:700;color:var(--cyan)">${g.home_prob}%</div>
-                    </div>
-                    <div style="background:var(--bg3);padding:5px 4px;border-radius:4px;text-align:center">
-                      <div style="font-size:8px;color:var(--text-dim);margin-bottom:2px">&nbsp;</div>
-                      <div style="font-size:13px;font-weight:700;color:var(--text)">${g.home_kalshi}%</div>
-                    </div>
-                    <div style="background:var(--bg3);padding:5px 4px;border-radius:4px;text-align:center">
-                      <div style="font-size:8px;color:var(--text-dim);margin-bottom:2px">&nbsp;</div>
-                      <div class="${homeEdgeClass}" style="font-size:13px;font-weight:700">${homeEdgeVal >= 0 ? '+' : ''}${homeEdgeVal}c</div>
-                    </div>
-                  </div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:0">
-                    <div style="background:var(--bg3);padding:5px 4px;border-radius:4px;text-align:center">
-                      <div style="font-size:8px;color:var(--text-dim);margin-bottom:2px">AWAY</div>
-                      <div style="font-size:13px;font-weight:700;color:var(--cyan)">${g.away_prob}%</div>
-                    </div>
-                    <div style="background:var(--bg3);padding:5px 4px;border-radius:4px;text-align:center">
-                      <div style="font-size:8px;color:var(--text-dim);margin-bottom:2px">&nbsp;</div>
-                      <div style="font-size:13px;font-weight:700;color:var(--text)">${g.away_kalshi}%</div>
-                    </div>
-                    <div style="background:var(--bg3);padding:5px 4px;border-radius:4px;text-align:center">
-                      <div style="font-size:8px;color:var(--text-dim);margin-bottom:2px">&nbsp;</div>
-                      <div class="${awayEdgeClass}" style="font-size:13px;font-weight:700">${awayEdgeVal >= 0 ? '+' : ''}${awayEdgeVal}c</div>
-                    </div>
+                  <div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:2px;font-size:10px">
+                    <div></div>
+                    <div style="text-align:center;color:var(--text-dim);font-size:8px;letter-spacing:.05em">VEGAS</div>
+                    <div style="text-align:center;color:var(--text-dim);font-size:8px;letter-spacing:.05em">KALSHI</div>
+                    <div style="text-align:center;color:var(--text-dim);font-size:8px;letter-spacing:.05em">EDGE</div>
+                    <div style="color:var(--text-dim);font-size:8px;padding:2px 4px">HOME</div>
+                    <div style="text-align:center;font-weight:700;color:var(--cyan);padding:2px 0">${g.home_prob}%</div>
+                    <div style="text-align:center;font-weight:700;color:var(--text);padding:2px 0">${g.home_kalshi}%</div>
+                    <div class="${homeEdgeClass}" style="text-align:center;font-weight:700;padding:2px 0">${homeEdgeVal >= 0 ? '+' : ''}${homeEdgeVal}c</div>
+                    <div style="color:var(--text-dim);font-size:8px;padding:2px 4px">AWAY</div>
+                    <div style="text-align:center;font-weight:700;color:var(--cyan);padding:2px 0">${g.away_prob}%</div>
+                    <div style="text-align:center;font-weight:700;color:var(--text);padding:2px 0">${g.away_kalshi}%</div>
+                    <div class="${awayEdgeClass}" style="text-align:center;font-weight:700;padding:2px 0">${awayEdgeVal >= 0 ? '+' : ''}${awayEdgeVal}c</div>
                   </div>
                   ${posRow}
                   ${autoBetRow}
@@ -2351,8 +2287,8 @@ async function loadBaseball(manual = false) {
           </div>`;
       }
 
-      // Show all games (today + tomorrow) in one list sorted by first pitch — no TOMORROW section
-      html += renderSection([...todayGames, ...tomorrowGames], 'GAMES', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
+      // Only show today's games
+      html += renderSection(todayGames, 'GAMES', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
 
       /* ── removed old flat games block ── */
       if (false) { // placeholder to keep block structure intact
@@ -2534,37 +2470,25 @@ function renderBaseballBets(betsData, liveBalance) {
   // ── Current Positions ─────────────────────────────────────────────────────
   if (pending.length) {
     html += `
-      <div class="panel-label" style="margin-bottom:12px">
-        CURRENT POSITIONS &nbsp;<span class="bb-status bb-status-pending" style="vertical-align:middle">${pending.length} open</span>
+      <div class="panel-label" style="margin-bottom:8px">
+        OPEN POSITIONS &nbsp;<span class="bb-status bb-status-pending" style="vertical-align:middle">${pending.length}</span>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px">
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
         ${pending.map(b => {
           const cost = (b.contracts * b.price_cents / 100).toFixed(2);
           const potW = (b.contracts * (100 - b.price_cents) / 100).toFixed(2);
-          const potL = (b.contracts * b.price_cents / 100).toFixed(2);
           return `
-            <div class="signal-card" style="min-width:240px;max-width:300px;border-color:rgba(255,215,0,0.2)">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                <span class="${b.side === 'home' ? 'green' : 'cyan'}" style="font-size:10px;font-weight:700">${b.side.toUpperCase()}</span>
-                <span class="bb-status bb-status-pending">pending</span>
+            <div style="padding:6px 8px;background:var(--bg2);border:1px solid rgba(255,215,0,0.15);border-radius:4px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+                <span style="font-size:11px;font-weight:700;color:var(--text-bright)">${b.team}</span>
+                <span class="bb-status bb-status-pending" style="font-size:8px">pending</span>
               </div>
-              <div style="font-size:15px;font-weight:600;color:var(--text-bright);margin-bottom:4px">${b.team}</div>
-              <div class="dim" style="font-size:11px;margin-bottom:10px">${b.away} @ ${b.home}</div>
-              <div style="display:flex;gap:8px;margin-bottom:10px">
-                <div style="flex:1;text-align:center;background:var(--bg3);padding:5px;border-radius:4px">
-                  <div class="dim" style="font-size:9px">CONTRACTS</div>
-                  <div style="font-size:13px;font-weight:700;color:var(--text-bright)">${b.contracts}</div>
-                </div>
-                <div style="flex:1;text-align:center;background:var(--bg3);padding:5px;border-radius:4px">
-                  <div class="dim" style="font-size:9px">RISK</div>
-                  <div style="font-size:13px;font-weight:700;color:var(--yellow)">$${cost}</div>
-                </div>
-                <div style="flex:1;text-align:center;background:var(--bg3);padding:5px;border-radius:4px">
-                  <div class="dim" style="font-size:9px">TO WIN</div>
-                  <div style="font-size:13px;font-weight:700;color:var(--green)">+$${potW}</div>
-                </div>
+              <div class="dim" style="font-size:9px;margin-bottom:4px">${b.away} @ ${b.home}</div>
+              <div style="display:flex;gap:10px;font-size:9px">
+                <span>${b.contracts}x @ ${b.price_cents}¢</span>
+                <span style="color:var(--yellow)">risk $${cost}</span>
+                <span style="color:var(--green)">win +$${potW}</span>
               </div>
-              <div class="dim" style="font-size:10px">Vegas ${b.vegas_prob}% · Kalshi ${b.price_cents}¢ · edge +${b.edge}c</div>
             </div>`;
         }).join('')}
       </div>`;

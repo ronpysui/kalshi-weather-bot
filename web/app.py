@@ -475,6 +475,36 @@ def api_baseball():
                 "away_position": away_pos,
             })
 
+        # ── Auto-log positions not yet in bet log ──────────────────────────────
+        try:
+            from baseball.bet_log import _load as _load_bets, log_bet as _auto_log
+            existing_bets = _load_bets()
+            logged_tickers = {b.get("ticker") for b in existing_bets}
+
+            for g_out in games_out:
+                for side_key in ("home", "away"):
+                    pos = g_out.get(f"{side_key}_position")
+                    ticker = g_out.get(f"{side_key}_ticker", "")
+                    if not pos or not ticker or pos.get("quantity", 0) <= 0:
+                        continue
+                    if ticker in logged_tickers:
+                        continue  # already logged
+                    # Auto-log this position
+                    team = g_out["home"] if side_key == "home" else g_out["away"]
+                    sig = g_out.get(f"{side_key}_signal") or {}
+                    avg_cents = int(round(pos.get("avg_price", 50)))
+                    _auto_log(
+                        home=g_out["home"], away=g_out["away"], team=team,
+                        side=side_key, ticker=ticker,
+                        contracts=pos["quantity"], price_cents=avg_cents,
+                        vegas_prob=sig.get("vegas_prob", 0), edge=sig.get("edge", 0),
+                        game_id=g_out["id"],
+                        game_date=g_out["commence"][:10] if g_out.get("commence") else "",
+                    )
+                    logged_tickers.add(ticker)
+        except Exception:
+            pass  # never break the API response
+
         return jsonify({
             "games":        games_out,
             "bankroll":     bankroll,
