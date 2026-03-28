@@ -1755,6 +1755,47 @@ async function fetchMLBScores() {
   } catch { return {}; }
 }
 
+// ── MLB team standings / season records (free, no key) ──────────────────────
+async function fetchMLBStandings() {
+  try {
+    const season = new Date().getFullYear();
+    const r = await fetch(
+      `https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${season}&standingsTypes=regularSeason`,
+      {signal: AbortSignal.timeout(5000)}
+    );
+    const d = await r.json();
+    const records = {};
+    for (const div of (d.records || [])) {
+      for (const tr of (div.teamRecords || [])) {
+        const name = tr.team.name;
+        const w    = tr.wins   || 0;
+        const l    = tr.losses || 0;
+        const pct  = w + l > 0 ? (w / (w + l) * 100).toFixed(0) : null;
+        records[name] = { w, l, pct };
+        // also store by last word (e.g. "Pirates") for fuzzy lookup
+        const last = name.split(' ').pop();
+        records[last] = records[name];
+      }
+    }
+    return records;
+  } catch { return {}; }
+}
+
+// Fuzzy standings lookup
+function _record(standings, teamName) {
+  if (!teamName) return null;
+  if (standings[teamName]) return standings[teamName];
+  const last = teamName.split(' ').pop();
+  return standings[last] || null;
+}
+
+// Render a tiny W-L badge
+function _recordBadge(rec) {
+  if (!rec || rec.w + rec.l === 0) return `<span class="dim" style="font-size:9px">no record yet</span>`;
+  const color = rec.pct >= 55 ? 'var(--green)' : rec.pct >= 45 ? 'var(--text)' : 'var(--red)';
+  return `<span style="font-size:9px;color:${color}">${rec.w}-${rec.l} &nbsp;(${rec.pct}%)</span>`;
+}
+
 // Fuzzy score lookup: find the best key match for away@home team names
 function _scoreKey(scores, away, home) {
   // exact
@@ -1776,10 +1817,11 @@ async function loadBaseball(manual = false) {
     el.innerHTML = '<div class="loading-overlay"><span class="spinner"></span>loading mlb games...</div>';
   }
   try {
-    const [res, betsRes, mlbScores] = await Promise.all([
+    const [res, betsRes, mlbScores, standings] = await Promise.all([
       fetch('/api/baseball'),
       fetch('/api/baseball/bets'),
       fetchMLBScores(),
+      fetchMLBStandings(),
     ]);
     const data     = await res.json();
     const betsData = await betsRes.json();
@@ -1893,8 +1935,14 @@ async function loadBaseball(manual = false) {
                     <span class="dim" style="font-size:10px">${minsLabel}</span>
                     ${statusBadge}
                   </div>
-                  <div style="font-size:14px;font-weight:700;color:var(--text-bright);margin-bottom:1px">${g.away}</div>
-                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px">@ ${g.home}</div>
+                  <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:1px">
+                    <span style="font-size:14px;font-weight:700;color:var(--text-bright)">${g.away}</span>
+                    ${_recordBadge(_record(standings, g.away))}
+                  </div>
+                  <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px">
+                    <span style="font-size:11px;color:var(--text-dim)">@ ${g.home}</span>
+                    ${_recordBadge(_record(standings, g.home))}
+                  </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;margin-bottom:3px">
                     <div style="font-size:9px;color:var(--text-dim);text-align:center;letter-spacing:.08em">VEGAS</div>
                     <div style="font-size:9px;color:var(--text-dim);text-align:center;letter-spacing:.08em">KALSHI</div>
@@ -2035,22 +2083,37 @@ async function loadBaseball(manual = false) {
                   <th style="padding:5px 8px;font-weight:400;text-align:left">MATCHUP</th>
                   <th style="padding:5px 8px;font-weight:400;text-align:center">SCORE</th>
                   <th style="padding:5px 8px;font-weight:400;text-align:left">WINNER</th>
+                  <th style="padding:5px 8px;font-weight:400;text-align:right">SEASON RECORD</th>
                 </tr>
               </thead>
               <tbody>
                 ${completedGames.map(sc => {
-                  const winner   = sc.awayScore > sc.homeScore ? sc.awayName : sc.homeName;
-                  const awayWon  = sc.awayScore > sc.homeScore;
+                  const winner    = sc.awayScore > sc.homeScore ? sc.awayName : sc.homeName;
+                  const awayWon   = sc.awayScore > sc.homeScore;
+                  const winnerRec = _record(standings, winner);
+                  const awayRec   = _record(standings, sc.awayName);
+                  const homeRec   = _record(standings, sc.homeName);
                   return `
                   <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
-                    <td style="padding:7px 8px;color:var(--text-dim)">
-                      <span style="color:${awayWon?'var(--text-bright)':'var(--text-dim)'}">${sc.awayName}</span>
-                      <span style="margin:0 6px;color:var(--text-dim)">@</span>
-                      <span style="color:${!awayWon?'var(--text-bright)':'var(--text-dim)'}">${sc.homeName}</span>
+                    <td style="padding:7px 8px">
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <span style="color:${awayWon?'var(--text-bright)':'var(--text-dim)'};font-weight:${awayWon?'600':'400'}">${sc.awayName}</span>
+                        ${awayRec ? `<span style="font-size:9px;color:var(--text-dim)">${awayRec.w}-${awayRec.l}</span>` : ''}
+                        <span style="color:var(--text-dim)">@</span>
+                        <span style="color:${!awayWon?'var(--text-bright)':'var(--text-dim)'};font-weight:${!awayWon?'600':'400'}">${sc.homeName}</span>
+                        ${homeRec ? `<span style="font-size:9px;color:var(--text-dim)">${homeRec.w}-${homeRec.l}</span>` : ''}
+                      </div>
                     </td>
                     <td style="padding:7px 8px;text-align:center;font-variant-numeric:tabular-nums;
                                font-weight:700;color:var(--cyan)">${sc.awayScore} – ${sc.homeScore}</td>
                     <td style="padding:7px 8px;color:var(--green);font-weight:600">▶ ${winner}</td>
+                    <td style="padding:7px 8px;text-align:right">
+                      ${winnerRec && winnerRec.w + winnerRec.l > 0
+                        ? `<span style="color:${winnerRec.pct>=55?'var(--green)':winnerRec.pct>=45?'var(--text)':'var(--red)'};font-size:10px">
+                            ${winnerRec.w}-${winnerRec.l} &nbsp;${winnerRec.pct}% wins
+                           </span>`
+                        : `<span class="dim" style="font-size:9px">—</span>`}
+                    </td>
                   </tr>`;
                 }).join('')}
               </tbody>
