@@ -1758,26 +1758,51 @@ async function fetchMLBScores() {
 // ── MLB team standings / season records (free, no key) ──────────────────────
 async function fetchMLBStandings() {
   try {
-    const season = new Date().getFullYear();
-    const r = await fetch(
-      `https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${season}&standingsTypes=regularSeason`,
-      {signal: AbortSignal.timeout(5000)}
-    );
-    const d = await r.json();
-    const records = {};
-    for (const div of (d.records || [])) {
-      for (const tr of (div.teamRecords || [])) {
-        const name = tr.team.name;
-        const w    = tr.wins   || 0;
-        const l    = tr.losses || 0;
-        const pct  = w + l > 0 ? (w / (w + l) * 100).toFixed(0) : null;
-        records[name] = { w, l, pct };
-        // also store by last word (e.g. "Pirates") for fuzzy lookup
-        const last = name.split(' ').pop();
-        records[last] = records[name];
+    const thisYear = new Date().getFullYear();
+    const lastYear = thisYear - 1;
+    const MIN_GAMES = 10; // games needed before current season is meaningful
+
+    // Fetch current AND last season in parallel
+    const [rCur, rPrev] = await Promise.all([
+      fetch(`https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${thisYear}&standingsTypes=regularSeason`, {signal: AbortSignal.timeout(5000)}),
+      fetch(`https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${lastYear}&standingsTypes=regularSeason`, {signal: AbortSignal.timeout(5000)}),
+    ]);
+    const [dCur, dPrev] = await Promise.all([rCur.json(), rPrev.json()]);
+
+    const parse = (d, seasonLabel) => {
+      const out = {};
+      for (const div of (d.records || [])) {
+        for (const tr of (div.teamRecords || [])) {
+          const name = tr.team.name;
+          const w = tr.wins || 0;
+          const l = tr.losses || 0;
+          const pct = w + l > 0 ? (w / (w + l) * 100).toFixed(0) : null;
+          const entry = { w, l, pct, season: seasonLabel };
+          out[name] = entry;
+          out[name.split(' ').pop()] = entry; // fuzzy: "Pirates"
+        }
+      }
+      return out;
+    };
+
+    const cur  = parse(dCur,  thisYear);
+    const prev = parse(dPrev, lastYear);
+
+    // Use current season if team has played >= MIN_GAMES, else fall back to last season
+    const merged = {};
+    const allNames = new Set([...Object.keys(cur), ...Object.keys(prev)]);
+    for (const name of allNames) {
+      const c = cur[name];
+      const p = prev[name];
+      if (c && (c.w + c.l) >= MIN_GAMES) {
+        merged[name] = c;
+      } else if (p) {
+        merged[name] = { ...p, fallback: true }; // mark as prior season
+      } else if (c) {
+        merged[name] = c;
       }
     }
-    return records;
+    return merged;
   } catch { return {}; }
 }
 
@@ -1791,9 +1816,11 @@ function _record(standings, teamName) {
 
 // Render a tiny W-L badge
 function _recordBadge(rec) {
-  if (!rec || rec.w + rec.l === 0) return `<span class="dim" style="font-size:9px">no record yet</span>`;
-  const color = rec.pct >= 55 ? 'var(--green)' : rec.pct >= 45 ? 'var(--text)' : 'var(--red)';
-  return `<span style="font-size:9px;color:${color}">${rec.w}-${rec.l} &nbsp;(${rec.pct}%)</span>`;
+  if (!rec || rec.w + rec.l === 0) return `<span class="dim" style="font-size:9px">—</span>`;
+  const color  = rec.pct >= 55 ? 'var(--green)' : rec.pct >= 45 ? 'var(--text)' : 'var(--red)';
+  const label  = rec.fallback ? `${rec.season}` : `${rec.season}`;
+  return `<span style="font-size:9px;color:${color}">${rec.w}-${rec.l} (${rec.pct}%)</span>`
+       + `<span style="font-size:8px;color:var(--text-dim);margin-left:3px">${label}</span>`;
 }
 
 // Fuzzy score lookup: find the best key match for away@home team names
@@ -2111,7 +2138,8 @@ async function loadBaseball(manual = false) {
                       ${winnerRec && winnerRec.w + winnerRec.l > 0
                         ? `<span style="color:${winnerRec.pct>=55?'var(--green)':winnerRec.pct>=45?'var(--text)':'var(--red)'};font-size:10px">
                             ${winnerRec.w}-${winnerRec.l} &nbsp;${winnerRec.pct}% wins
-                           </span>`
+                           </span>
+                           <span style="font-size:9px;color:var(--text-dim);margin-left:4px">${winnerRec.season}</span>`
                         : `<span class="dim" style="font-size:9px">—</span>`}
                     </td>
                   </tr>`;
