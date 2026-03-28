@@ -63,9 +63,9 @@ def get_mlb_games() -> list[dict]:
     for g in data:
         commence = datetime.fromisoformat(g["commence_time"].replace("Z", "+00:00"))
 
-        # Skip games that started more than 3 hours ago
+        # Skip games that started more than 6 hours ago (covers extra-inning games)
         hours_ago = (now - commence).total_seconds() / 3600
-        if hours_ago > 3:
+        if hours_ago > 6:
             continue
 
         home = g["home_team"]
