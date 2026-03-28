@@ -2013,6 +2013,9 @@ async function loadBaseball(manual = false) {
                       <div style="font-size:9px;color:rgba(0,255,136,0.6);margin-top:3px">
                         risk $${bestSig.risk} &nbsp;·&nbsp; payout $${(bestSig.risk * roiN).toFixed(2)} if win
                       </div>
+                      <div style="font-size:9px;color:rgba(255,255,255,0.2);margin-top:4px;line-height:1.4">
+                        Worker places this automatically on Railway — no action needed.
+                      </div>
                     </div>`;
                   })()
                 : `<div style="margin-top:10px;padding:6px 8px;background:rgba(255,255,255,0.03);
@@ -2163,10 +2166,7 @@ async function loadBaseball(manual = false) {
         </div>
       </div>`;
 
-      html += renderSection(todayGames,    'TODAY',    new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
-      html += renderSection(tomorrowGames, 'TOMORROW', new Date(Date.now()+864e5).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
-
-      // ── RESULTS: completed games (today + yesterday) ─────────────────────────
+      // ── RESULTS: completed games (today + yesterday) — shown FIRST ──────────
       const completedGames = Object.values(mlbScores).filter(sc => sc.done && sc.awayScore !== null);
       const todayStr = new Date().toLocaleDateString('en-CA', {timeZone:'America/Chicago'});
       const ydayStr  = new Date(Date.now() - 864e5).toLocaleDateString('en-CA', {timeZone:'America/Chicago'});
@@ -2244,7 +2244,17 @@ async function loadBaseball(manual = false) {
               </div>`;
             }).join('')}
           </div>`;
+      } else {
+        html += `
+          <div style="margin-bottom:24px;padding:12px 16px;background:rgba(255,255,255,0.02);
+                      border:1px solid var(--border);border-radius:6px">
+            <div class="panel-label" style="margin-bottom:6px">RESULTS</div>
+            <div class="dim" style="font-size:11px">No completed games yet — check back after the first games finish tonight.</div>
+          </div>`;
       }
+
+      html += renderSection(todayGames,    'TODAY',    new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
+      html += renderSection(tomorrowGames, 'TOMORROW', new Date(Date.now()+864e5).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
 
       /* ── removed old flat games block ── */
       if (false) { // placeholder to keep block structure intact
