@@ -18,7 +18,7 @@ ET = ZoneInfo("America/New_York")
 
 BASEBALL_MIN_EDGE    = float(os.getenv("BASEBALL_MIN_EDGE", "0.04"))  # 4 cents
 BASEBALL_KELLY_FRAC  = 0.25
-LOCK_OUT_MIN         = 5    # stop betting this many minutes before first pitch
+LOCK_OUT_MIN         = 30   # stop betting 30 min before first pitch (odds get stale)
 
 
 @dataclass

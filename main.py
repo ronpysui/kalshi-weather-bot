@@ -15,7 +15,8 @@ Environment variables (set in .env or shell)
   DRY_RUN                  true (default) / false
   BANKROLL                 Starting bankroll in USD (default 100)
   MIN_EDGE                 Minimum edge in dollars to trigger a bet (default 0.07)
-  BET_HOUR_ET              Hour (ET) to place bets each morning (default 7)
+  BET_HOUR_ET              Hour (ET) to place temp bets each morning (default 7)
+  ODDS_API_KEY             API key for the-odds-api.com (baseball bot)
 """
 
 import argparse
@@ -168,9 +169,10 @@ def run_baseball_once(bankroll: float) -> None:
     Logic:
     - Runs every poll cycle alongside the temp bot.
     - For each upcoming game, checks if Vegas consensus vs Kalshi implied edge > 4¢.
-    - If edge found AND game hasn't started AND ticker not already bet → place + log.
+    - If edge found AND game > 30 min from pitch AND no open Kalshi position → place + log.
     - If no edge found now → does nothing. Will check again next poll (every 30 min).
-    - Hard lock: stops betting 5 min before first pitch (game odds become stale).
+    - Hard lock: stops betting 30 min before first pitch (odds get stale near game time).
+    - If you close a position on Kalshi, the bot WILL re-bet if edge still exists.
     """
     if not os.getenv("ODDS_API_KEY"):
         return  # silently skip if no API key configured
@@ -180,7 +182,7 @@ def run_baseball_once(bankroll: float) -> None:
         from baseball.kalshi_mlb  import get_mlb_events, match_to_odds
         from baseball.analyzer    import analyze_all
         from baseball.bet_log     import log_bet
-        from kalshi.api           import place_order
+        from kalshi.api           import place_order, get_open_positions
 
         odds_games    = get_mlb_games()
         kalshi_events = get_mlb_events()
@@ -190,13 +192,14 @@ def run_baseball_once(bankroll: float) -> None:
         if not signals:
             return
 
-        # Load already-bet tickers for today (reuse daily_lock infra)
-        from trader.daily_lock import already_bet as _already_bet, record_bet as _record_bet
+        # Check actual Kalshi positions — if you closed a position, bot can re-bet
+        open_positions = get_open_positions()
 
         for sig in signals:
-            bb_key = f"bb:{sig.ticker}"   # prefix to avoid collisions with temp bot
-            if _already_bet(bb_key):
-                continue  # already placed this game/side today
+            # Skip if we already have an open position on this ticker
+            pos = open_positions.get(sig.ticker)
+            if pos and pos.get("quantity", 0) > 0:
+                continue  # already holding this position
 
             contracts   = max(1, int(bankroll * sig.kelly_frac / max(sig.kalshi_prob, 0.01)))
             price_cents = round(sig.kalshi_prob * 100)
@@ -219,13 +222,8 @@ def run_baseball_once(bankroll: float) -> None:
                 price_cents = price_cents,
                 vegas_prob  = round(sig.vegas_prob * 100, 1),
                 edge        = round(sig.edge * 100, 1),
-                game_id     = sig.game_id,  # store Odds API game ID for exact duplicate detection
+                game_id     = sig.game_id,
             )
-
-            # Guard so we don't bet the same ticker again today
-            _record_bet({"ticker": bb_key, "side": "yes", "contracts": contracts,
-                         "price": price_cents, "edge": round(sig.edge * 100, 1),
-                         "our_prob": round(sig.vegas_prob * 100, 1), "label": sig.team})
 
             console.print(
                 f"[cyan]Baseball bet: {sig.team} ({sig.side}) "
