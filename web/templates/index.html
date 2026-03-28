@@ -861,7 +861,7 @@ async function loadBaseball(manual = false) {
     const betsData = await betsRes.json();
 
     // ── Sidebar content (summary + chart + positions + past bets) ──────────
-    const sidebarHtml = renderBaseballBets(betsData, liveBalance, data.positions || []);
+    const sidebarHtml = renderBaseballBets(betsData, liveBalance, data.positions || [], mlbScores);
 
     // ── Main column content ────────────────────────────────────────────────
     let mainHtml = '';
@@ -1377,8 +1377,9 @@ async function placeBaseballBet(gameId, side, contracts, price, teamName) {
   }
 }
 
-function renderBaseballBets(betsData, liveBalance, livePositions) {
+function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores) {
   livePositions = livePositions || [];
+  mlbScores = mlbScores || {};
   const s    = betsData.summary || {};
   const bets = betsData.bets   || [];
 
@@ -1438,19 +1439,43 @@ function renderBaseballBets(betsData, liveBalance, livePositions) {
         OPEN POSITIONS &nbsp;<span class="bb-status bb-status-pending" style="vertical-align:middle">${livePositions.length}</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">
-        ${livePositions.map(p => `
-            <div style="padding:5px 7px;background:var(--bg2);border:1px solid rgba(255,215,0,0.15);border-radius:4px">
+        ${livePositions.map(p => {
+            const sc = _scoreKey(mlbScores, p.away, p.home);
+            const isLive = sc && (sc.inProgress || sc.done);
+            const scoreStr = sc && sc.awayScore !== null
+              ? `${sc.awayScore} – ${sc.homeScore}` : '';
+            const situStr = sc && sc.done ? 'Final'
+              : sc && sc.inning ? `${sc.half === 'Bottom' ? '▼' : '▲'}${sc.inning}`
+              : sc && sc.inProgress ? 'Live' : '';
+            const winner = sc && sc.done && sc.awayScore !== null
+              ? (sc.awayScore > sc.homeScore ? sc.awayName : sc.homeName) : null;
+            const betWon = winner && p.team && (winner.includes(p.team.split(' ').pop()) || p.team.includes(winner.split(' ').pop()));
+            const borderColor = sc && sc.done
+              ? (betWon ? 'rgba(0,255,136,0.4)' : 'rgba(255,68,102,0.4)')
+              : 'rgba(255,215,0,0.15)';
+            return `
+            <div data-live-game="1" data-away="${p.away}" data-home="${p.home}"
+                 style="padding:5px 7px;background:var(--bg2);border:1px solid ${borderColor};border-radius:4px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
                 <span style="font-size:11px;font-weight:700;color:var(--text-bright)">${p.team}</span>
-                <span class="bb-status bb-status-pending" style="font-size:8px">live</span>
+                ${sc && sc.done
+                  ? `<span style="font-size:8px;font-weight:700;color:${betWon ? 'var(--green)' : 'var(--red)'}">${betWon ? '✓ WON' : '✗ LOST'}</span>`
+                  : `<span class="bb-status bb-status-pending" style="font-size:8px">live</span>`}
               </div>
-              <div class="dim" style="font-size:9px;margin-bottom:3px">${p.away} @ ${p.home}</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+                <span class="dim" style="font-size:9px">${p.away} @ ${p.home}</span>
+                ${isLive ? `<span style="font-size:10px;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums">
+                  <span class="live-score">${scoreStr}</span>
+                  <span class="live-situ dim" style="font-size:8px;margin-left:4px">${situStr}</span>
+                </span>` : ''}
+              </div>
               <div style="display:flex;gap:8px;font-size:9px">
                 <span>${p.quantity}x @ ${p.avg_price}¢</span>
                 <span style="color:var(--yellow)">cost $${p.cost.toFixed(2)}</span>
                 <span style="color:var(--green)">win +$${p.to_win.toFixed(2)}</span>
               </div>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
       </div>`;
   } else if (pending.length) {
     // Fallback: show pending bets from log if Kalshi positions unavailable
