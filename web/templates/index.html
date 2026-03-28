@@ -1728,6 +1728,28 @@ function _bbStartNextGameCountdown(minsToGame) {
   _bbTickNextGame(); // immediate first render
 }
 
+// ── Bot scan countdown (ticks every second) ──────────────────────────────────
+let _scanTimer = null;
+function _bbStartScanCountdown() {
+  if (_scanTimer) clearInterval(_scanTimer);
+  _scanTimer = setInterval(_bbTickScan, 1000);
+}
+function _bbTickScan() {
+  const el = document.getElementById('bb-scan-cd');
+  if (!el || !window._bbLastScan) return;
+  const lastMs = new Date(window._bbLastScan).getTime();
+  const nextMs = lastMs + (window._bbPollInterval || 1800) * 1000;
+  const secsLeft = Math.max(0, Math.floor((nextMs - Date.now()) / 1000));
+  if (secsLeft <= 0) {
+    el.textContent = 'scanning...';
+    el.style.color = 'var(--green)';
+  } else {
+    const m = Math.floor(secsLeft / 60);
+    const s = secsLeft % 60;
+    el.textContent = `${m}m ${String(s).padStart(2, '0')}s`;
+  }
+}
+
 function _bbTickNextGame() {
   const el = document.getElementById('bb-next-game-cd');
   if (!el || _nextGameEpoch === null) return;
@@ -2194,12 +2216,32 @@ async function loadBaseball(manual = false) {
         return s;
       };
 
-      // Bot scan info
-      const scanNote = `<div style="margin-bottom:8px;padding:4px 8px;background:rgba(0,212,255,0.04);
+      // Bot scan countdown
+      const lastScan     = data.last_scan;
+      const pollInterval = data.poll_interval || 1800; // seconds (default 30 min)
+      let scanCountdown  = '';
+      if (lastScan) {
+        const lastMs = new Date(lastScan).getTime();
+        const nextMs = lastMs + pollInterval * 1000;
+        const nowMs  = Date.now();
+        const secsLeft = Math.max(0, Math.floor((nextMs - nowMs) / 1000));
+        const m = Math.floor(secsLeft / 60);
+        const s = secsLeft % 60;
+        scanCountdown = secsLeft > 0
+          ? `next scan in <b id="bb-scan-cd" style="color:var(--cyan)">${m}m ${String(s).padStart(2,'0')}s</b>`
+          : `<span style="color:var(--green)">scanning now...</span>`;
+      } else {
+        scanCountdown = `<span class="dim">bot not yet started</span>`;
+      }
+      // Store for live tick
+      window._bbLastScan = lastScan;
+      window._bbPollInterval = pollInterval;
+
+      const scanNote = `<div style="margin-bottom:8px;padding:5px 10px;background:rgba(0,212,255,0.04);
                                      border:1px solid rgba(0,212,255,0.1);border-radius:4px;
                                      display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:9px;color:var(--cyan)">🤖 Bot scans every 30 min · locks out 30min before pitch</span>
-        <span id="bb-dash-refresh" style="font-size:9px;color:var(--text-dim)">dashboard refreshes every 60s</span>
+        <span style="font-size:10px;color:var(--text-dim)">🤖 ${scanCountdown} · locks out 30min before pitch</span>
+        <span style="font-size:9px;color:var(--text-dim)">refreshes every 60s</span>
       </div>`;
 
       html += `<div style="margin-bottom:16px">
@@ -2328,8 +2370,9 @@ async function loadBaseball(manual = false) {
 
     el.innerHTML = html;
     renderPnlChart(betsData, liveBalance);
-    // Start next-game countdown AFTER DOM is updated so element exists
+    // Start countdowns AFTER DOM is updated so elements exist
     if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].mins_to_game);
+    if (data.last_scan) _bbStartScanCountdown();
     // Start fast score refresh if any live games visible
     if (data.games && data.games.some(g => g.mins_to_game <= 0)) _startLiveScoreTimer();
     _bbStartCountdown();

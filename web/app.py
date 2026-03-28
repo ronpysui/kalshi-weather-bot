@@ -555,11 +555,20 @@ def api_baseball():
                 "side":      "home" if game_info and game_info.get("home_ticker") == ticker else "away",
             })
 
+        # Last bot scan timestamp
+        try:
+            from main import get_last_scan_time
+            last_scan = get_last_scan_time()
+        except Exception:
+            last_scan = None
+
         return jsonify({
             "games":          games_out,
             "positions":      live_positions,   # from Kalshi API (source of truth)
             "bankroll":       bankroll,
             "has_odds_key":   bool(os.getenv("ODDS_API_KEY")),
+            "last_scan":      last_scan,
+            "poll_interval":  config.POLL_INTERVAL_SECONDS,
         })
     except Exception as e:
         return jsonify({"error": str(e), "games": [], "signals": []}), 500

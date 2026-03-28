@@ -160,6 +160,53 @@ def run_once(bankroll: float) -> float:
     return bankroll
 
 
+# ── Scan timestamp ────────────────────────────────────────────────────────────
+
+SCAN_TS_PATH = os.path.join("data", "last_baseball_scan.txt")
+REDIS_SCAN_KEY = "kalshi:last_baseball_scan"
+
+def _record_scan_time():
+    """Write current UTC ISO timestamp so dashboard can show next-scan countdown."""
+    ts = datetime.now(ZoneInfo("UTC")).isoformat()
+    # Redis (Railway)
+    try:
+        import redis
+        url = os.getenv("REDIS_URL") or os.getenv("KV_URL")
+        if url:
+            r = redis.from_url(url, decode_responses=True)
+            r.set(REDIS_SCAN_KEY, ts)
+    except Exception:
+        pass
+    # File fallback (local dev)
+    try:
+        os.makedirs("data", exist_ok=True)
+        with open(SCAN_TS_PATH, "w") as f:
+            f.write(ts)
+    except Exception:
+        pass
+
+
+def get_last_scan_time() -> str | None:
+    """Read last scan timestamp (UTC ISO string)."""
+    try:
+        import redis
+        url = os.getenv("REDIS_URL") or os.getenv("KV_URL")
+        if url:
+            r = redis.from_url(url, decode_responses=True)
+            ts = r.get(REDIS_SCAN_KEY)
+            if ts:
+                return ts
+    except Exception:
+        pass
+    try:
+        if os.path.exists(SCAN_TS_PATH):
+            with open(SCAN_TS_PATH) as f:
+                return f.read().strip()
+    except Exception:
+        pass
+    return None
+
+
 # ── Baseball worker ────────────────────────────────────────────────────────────
 
 def run_baseball_once(bankroll: float) -> None:
@@ -176,6 +223,9 @@ def run_baseball_once(bankroll: float) -> None:
     """
     if not os.getenv("ODDS_API_KEY"):
         return  # silently skip if no API key configured
+
+    # Record scan timestamp (Redis or file) so dashboard can show countdown
+    _record_scan_time()
 
     try:
         from baseball.odds_api    import get_mlb_games
