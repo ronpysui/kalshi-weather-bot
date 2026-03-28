@@ -475,12 +475,16 @@ def api_baseball():
                 "away_position": away_pos,
             })
 
-        # ── Auto-log positions not yet in bet log ──────────────────────────────
+        # ── Sync bet log with live Kalshi positions ─────────────────────────────
         try:
-            from baseball.bet_log import _load as _load_bets, log_bet as _auto_log
+            from baseball.bet_log import _load as _load_bets, _save as _save_bets, log_bet as _auto_log
+            from datetime import timezone as _tz
             existing_bets = _load_bets()
             logged_tickers = {b.get("ticker") for b in existing_bets}
+            open_tickers = {t for t, p in positions.items() if p.get("quantity", 0) > 0}
+            dirty = False
 
+            # 1. Auto-log positions not yet in bet log
             for g_out in games_out:
                 for side_key in ("home", "away"):
                     pos = g_out.get(f"{side_key}_position")
@@ -488,8 +492,16 @@ def api_baseball():
                     if not pos or not ticker or pos.get("quantity", 0) <= 0:
                         continue
                     if ticker in logged_tickers:
-                        continue  # already logged
-                    # Auto-log this position
+                        # Update price to match actual Kalshi fill price
+                        for b in existing_bets:
+                            if b.get("ticker") == ticker and b.get("status") == "pending":
+                                real_avg = int(round(pos.get("avg_price", b.get("price_cents", 50))))
+                                if b.get("price_cents") != real_avg:
+                                    b["price_cents"] = real_avg
+                                    b["contracts"] = pos["quantity"]
+                                    b["cost"] = round(pos["quantity"] * real_avg / 100, 2)
+                                    dirty = True
+                        continue
                     team = g_out["home"] if side_key == "home" else g_out["away"]
                     sig = g_out.get(f"{side_key}_signal") or {}
                     avg_cents = int(round(pos.get("avg_price", 50)))
@@ -502,6 +514,21 @@ def api_baseball():
                         game_date=g_out["commence"][:10] if g_out.get("commence") else "",
                     )
                     logged_tickers.add(ticker)
+
+            # 2. Auto-cancel: pending bets whose ticker has no open Kalshi position
+            for b in existing_bets:
+                if b.get("status") != "pending":
+                    continue
+                ticker = b.get("ticker", "")
+                if ticker and ticker not in open_tickers:
+                    b["status"] = "canceled"
+                    b["result"] = "canceled"
+                    b["pnl"] = 0
+                    b["resolved_at"] = datetime.now(_tz.utc).isoformat()
+                    dirty = True
+
+            if dirty:
+                _save_bets(existing_bets)
         except Exception:
             pass  # never break the API response
 

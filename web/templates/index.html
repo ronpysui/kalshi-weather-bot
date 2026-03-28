@@ -859,9 +859,10 @@
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
-    .bb-status-won     { background: rgba(0,255,136,0.12); color: var(--green); }
-    .bb-status-lost    { background: rgba(255,68,102,0.12); color: var(--red); }
-    .bb-status-pending { background: rgba(255,215,0,0.10); color: var(--yellow); }
+    .bb-status-won      { background: rgba(0,255,136,0.12); color: var(--green); }
+    .bb-status-lost     { background: rgba(255,68,102,0.12); color: var(--red); }
+    .bb-status-pending  { background: rgba(255,215,0,0.10); color: var(--yellow); }
+    .bb-status-canceled { background: rgba(255,255,255,0.05); color: var(--text-dim); }
     .bb-pnl-pos { color: var(--green); font-weight: 700; }
     .bb-pnl-neg { color: var(--red);   font-weight: 700; }
     .bb-pnl-nil { color: var(--text-dim); }
@@ -2019,10 +2020,11 @@ async function loadBaseball(manual = false) {
               const loggedBets = (betsData && betsData.bets) ? betsData.bets : [];
               const gameTickers = [homeTicker, awayTicker].filter(Boolean);
               const todayStr = new Date().toLocaleDateString('en-CA', {timeZone: TZ});
+              // Only match pending bets (not canceled/resolved ones)
               const existingBet = loggedBets.find(b => {
+                if (b.status === 'canceled' || b.result === 'canceled') return false;
                 if (g.id && b.game_id && b.game_id === g.id) return true;
                 if (b.ticker && gameTickers.includes(b.ticker)) return true;
-                // Same-day team name fallback (for old bets without game_id/ticker)
                 const bDate = (b.game_date || b.date_placed || '').slice(0, 10);
                 const gDate = new Date(g.commence).toLocaleDateString('en-CA', {timeZone: TZ});
                 return bDate === gDate && b.home === g.home && b.away === g.away;
@@ -2476,7 +2478,7 @@ function renderBaseballBets(betsData, liveBalance, livePositions) {
       <canvas id="bb-pnl-chart" height="80"></canvas>
     </div>`;
 
-  // Split into pending (current positions) vs resolved (history)
+  // Split into pending (current positions) vs resolved (history includes canceled)
   const pending  = bets.filter(b => b.status === 'pending');
   const resolved = bets.filter(b => b.status !== 'pending');
 
