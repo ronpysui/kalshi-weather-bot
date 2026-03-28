@@ -219,6 +219,7 @@ def run_baseball_once(bankroll: float) -> None:
                 price_cents = price_cents,
                 vegas_prob  = round(sig.vegas_prob * 100, 1),
                 edge        = round(sig.edge * 100, 1),
+                game_id     = sig.game_id,  # store Odds API game ID for exact duplicate detection
             )
 
             # Guard so we don't bet the same ticker again today

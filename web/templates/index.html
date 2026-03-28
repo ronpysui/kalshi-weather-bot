@@ -2016,12 +2016,12 @@ async function loadBaseball(manual = false) {
               };
               const posRow = _posHtml(homePos, 'HOME', g.home) + _posHtml(awayPos, 'AWAY', g.away);
 
-              // ── Duplicate bet check (cross-ref bet_log) ────────────────────
+              // ── Duplicate bet check — game_id only (team names too broad:
+              //    same teams can play back-to-back days causing false positives)
               const loggedBets = (betsData && betsData.bets) ? betsData.bets : [];
-              const existingBet = loggedBets.find(b =>
-                (b.game_id && b.game_id === g.id) ||
-                (b.home && b.away && b.home === g.home && b.away === g.away)
-              );
+              const existingBet = g.id
+                ? loggedBets.find(b => b.game_id && b.game_id === g.id)
+                : null;
 
               const autoBetRow = isLive
                 ? `<div style="margin-top:10px;padding:6px 8px;background:rgba(255,60,60,0.06);
