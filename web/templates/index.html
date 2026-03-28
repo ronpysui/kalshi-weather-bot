@@ -1721,15 +1721,65 @@ function _bbStartCountdown() {
   _bbRefreshTimer = setInterval(_bbTickCountdown, 1000);
 }
 
+// ── MLB live scores (free MLB Stats API, no key needed) ─────────────────────
+async function fetchMLBScores() {
+  try {
+    const date = new Date().toLocaleDateString('en-CA', {timeZone: 'America/Chicago'});
+    const r = await fetch(
+      `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}&hydrate=linescore,teams`,
+      {signal: AbortSignal.timeout(5000)}
+    );
+    const d = await r.json();
+    const scores = {};
+    for (const dateEntry of (d.dates || [])) {
+      for (const game of (dateEntry.games || [])) {
+        const away   = game.teams.away.team.name;
+        const home   = game.teams.home.team.name;
+        const key    = `${away}::${home}`;
+        const state  = game.status.detailedState || '';
+        const ls     = game.linescore || {};
+        scores[key] = {
+          status:     state,
+          done:       ['Final','Game Over','Completed Early'].some(s => state.includes(s)),
+          inProgress: state.includes('In Progress') || state.includes('Manager Challenge'),
+          awayScore:  game.teams.away.score ?? null,
+          homeScore:  game.teams.home.score ?? null,
+          inning:     ls.currentInning || null,
+          half:       ls.inningHalf || '',
+          awayName:   away,
+          homeName:   home,
+        };
+      }
+    }
+    return scores;
+  } catch { return {}; }
+}
+
+// Fuzzy score lookup: find the best key match for away@home team names
+function _scoreKey(scores, away, home) {
+  // exact
+  const exact = `${away}::${home}`;
+  if (scores[exact]) return scores[exact];
+  // partial match
+  for (const k of Object.keys(scores)) {
+    const [ka, kh] = k.split('::');
+    if ((ka.includes(away.split(' ').pop()) || away.includes(ka.split(' ').pop())) &&
+        (kh.includes(home.split(' ').pop()) || home.includes(kh.split(' ').pop())))
+      return scores[k];
+  }
+  return null;
+}
+
 async function loadBaseball(manual = false) {
   const el = document.getElementById('baseball-content');
   if (manual) {
     el.innerHTML = '<div class="loading-overlay"><span class="spinner"></span>loading mlb games...</div>';
   }
   try {
-    const [res, betsRes] = await Promise.all([
+    const [res, betsRes, mlbScores] = await Promise.all([
       fetch('/api/baseball'),
       fetch('/api/baseball/bets'),
+      fetchMLBScores(),
     ]);
     const data     = await res.json();
     const betsData = await betsRes.json();
@@ -1909,16 +1959,41 @@ async function loadBaseball(manual = false) {
               ${edgeInSection ? `<span style="font-size:10px;color:var(--green);margin-left:4px">${edgeInSection} bet signal${edgeInSection > 1 ? 's' : ''}</span>` : ''}
             </div>`;
 
-        // Live/in-progress games for this day as a compact strip
+        // Live/in-progress games — show with MLB live scores
         if (liveInSection.length) {
-          s += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-            ${liveInSection.map(g => `
-              <div style="padding:6px 12px;background:rgba(255,60,60,0.06);border:1px solid rgba(255,60,60,0.2);
-                          border-radius:6px;font-size:11px">
-                <span style="color:var(--red);font-weight:700">● LIVE</span>
-                <span style="color:var(--text-bright);margin:0 6px">${g.away} @ ${g.home}</span>
-                <span class="dim">${new Date(g.commence).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:TZ})} CST</span>
-              </div>`).join('')}
+          s += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+            ${liveInSection.map(g => {
+              const sc    = _scoreKey(mlbScores, g.away, g.home);
+              const done  = sc && sc.done;
+              const scoreStr = sc && sc.awayScore !== null
+                ? `${sc.awayScore} – ${sc.homeScore}`
+                : `${g.away_kalshi}% / ${g.home_kalshi}%`;
+              const situStr = done ? 'Final'
+                : sc && sc.inning  ? `${sc.half === 'Bottom' ? '▼' : '▲'}${sc.inning}`
+                : 'In Progress';
+              const bg    = done ? 'rgba(255,255,255,0.04)' : 'rgba(255,60,60,0.06)';
+              const bd    = done ? 'rgba(255,255,255,0.08)' : 'rgba(255,60,60,0.2)';
+              const badge = done
+                ? `<span style="font-size:9px;color:var(--text-dim);font-weight:600">FINAL</span>`
+                : `<span style="font-size:9px;color:var(--red);font-weight:700">● LIVE</span>`;
+              const winner = done && sc
+                ? (sc.awayScore > sc.homeScore ? sc.awayName : sc.homeName)
+                : null;
+              return `
+              <div style="padding:8px 14px;background:${bg};border:1px solid ${bd};
+                          border-radius:6px;font-size:11px;min-width:220px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                  ${badge}
+                  <span class="dim" style="font-size:9px">${situStr}</span>
+                </div>
+                <div style="color:var(--text-bright);font-weight:600;margin-bottom:2px">${g.away} @ ${g.home}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span style="font-size:16px;font-weight:700;color:${done ? 'var(--cyan)' : 'var(--text)'};
+                               font-variant-numeric:tabular-nums">${scoreStr}</span>
+                  ${winner ? `<span style="font-size:10px;color:var(--green)">▶ ${winner}</span>` : ''}
+                </div>
+              </div>`;
+            }).join('')}
           </div>`;
         }
 
@@ -1943,6 +2018,45 @@ async function loadBaseball(manual = false) {
 
       html += renderSection(todayGames,    'TODAY',    new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
       html += renderSection(tomorrowGames, 'TOMORROW', new Date(Date.now()+864e5).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
+
+      // ── RESULTS: all completed games today ──────────────────────────────────
+      const completedGames = Object.values(mlbScores).filter(sc => sc.done && sc.awayScore !== null);
+      if (completedGames.length) {
+        html += `
+          <div style="margin-bottom:24px">
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;
+                        padding-bottom:6px;border-bottom:1px solid var(--border)">
+              <div class="panel-label" style="margin:0">RESULTS</div>
+              <span class="dim" style="font-size:10px">completed games today</span>
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead>
+                <tr style="color:var(--text-dim);border-bottom:1px solid var(--border)">
+                  <th style="padding:5px 8px;font-weight:400;text-align:left">MATCHUP</th>
+                  <th style="padding:5px 8px;font-weight:400;text-align:center">SCORE</th>
+                  <th style="padding:5px 8px;font-weight:400;text-align:left">WINNER</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${completedGames.map(sc => {
+                  const winner   = sc.awayScore > sc.homeScore ? sc.awayName : sc.homeName;
+                  const awayWon  = sc.awayScore > sc.homeScore;
+                  return `
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+                    <td style="padding:7px 8px;color:var(--text-dim)">
+                      <span style="color:${awayWon?'var(--text-bright)':'var(--text-dim)'}">${sc.awayName}</span>
+                      <span style="margin:0 6px;color:var(--text-dim)">@</span>
+                      <span style="color:${!awayWon?'var(--text-bright)':'var(--text-dim)'}">${sc.homeName}</span>
+                    </td>
+                    <td style="padding:7px 8px;text-align:center;font-variant-numeric:tabular-nums;
+                               font-weight:700;color:var(--cyan)">${sc.awayScore} – ${sc.homeScore}</td>
+                    <td style="padding:7px 8px;color:var(--green);font-weight:600">▶ ${winner}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>`;
+      }
 
       /* ── removed old flat games block ── */
       if (false) { // placeholder to keep block structure intact
@@ -1972,7 +2086,7 @@ async function loadBaseball(manual = false) {
     el.innerHTML = html;
     renderPnlChart(betsData);
     // Start next-game countdown AFTER DOM is updated so element exists
-    if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].commence);
+    if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].mins_to_game);
     _bbStartCountdown();
   } catch(e) {
     document.getElementById('baseball-content').innerHTML =
