@@ -442,13 +442,17 @@ def api_baseball_log_bet():
         price_cents = int(body.get("price_cents", 50)),
         vegas_prob  = float(body.get("vegas_prob", 0)),
         edge        = float(body.get("edge", 0)),
+        game_id     = body.get("game_id", ""),
+        game_date   = body.get("game_date", ""),
     )
     return jsonify({"status": "ok", "bet": bet})
 
 
 @app.route("/api/baseball/bets")
 def api_baseball_bets():
-    from baseball.bet_log import get_all_bets, pnl_summary
+    from baseball.bet_log import get_all_bets, pnl_summary, resolve_pending
+    # Resolve any pending bets via MLB Stats API before returning
+    resolve_pending()
     bets = get_all_bets()
     summary = pnl_summary(bets)
     return jsonify({"bets": list(reversed(bets)), "summary": summary})

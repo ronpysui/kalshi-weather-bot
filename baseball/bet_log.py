@@ -1,5 +1,6 @@
 """
-Baseball bet log — stores placed bets and resolves outcomes via Kalshi market status.
+Baseball bet log — stores placed bets and resolves outcomes via MLB Stats API
+and Kalshi market status.
 
 Storage:
   - Local:   data/baseball_bets.json
@@ -62,25 +63,133 @@ def _save(bets: list[dict]) -> None:
         json.dump(bets, f, indent=2)
 
 
+# ── MLB Stats API outcome resolution ─────────────────────────────────────────
+
+def _resolve_via_mlb_stats(bet: dict) -> bool:
+    """
+    Check the MLB Stats API for the game result.
+    Returns True if the bet was resolved (win/loss), False if still pending.
+    Uses the game_date field (YYYY-MM-DD) on the bet, or falls back to
+    extracting the date from the timestamp.
+    """
+    try:
+        import urllib.request
+
+        # Determine the game date
+        game_date = bet.get("game_date")
+        if not game_date:
+            # Fall back to date from timestamp
+            ts = bet.get("timestamp", "")
+            game_date = ts[:10] if ts else None
+        if not game_date:
+            return False
+
+        url = (
+            f"https://statsapi.mlb.com/api/v1/schedule"
+            f"?sportId=1&date={game_date}&hydrate=linescore"
+        )
+        with urllib.request.urlopen(url, timeout=8) as resp:
+            schedule = json.loads(resp.read().decode())
+
+        home_team = (bet.get("home") or "").lower().strip()
+        away_team = (bet.get("away") or "").lower().strip()
+        bet_team  = (bet.get("team") or "").lower().strip()
+
+        for date_obj in schedule.get("dates", []):
+            for game in date_obj.get("games", []):
+                status = game.get("status", {}).get("abstractGameState", "")
+                if status != "Final":
+                    continue
+
+                g_home = game.get("teams", {}).get("home", {}).get("team", {}).get("name", "").lower()
+                g_away = game.get("teams", {}).get("away", {}).get("team", {}).get("name", "").lower()
+
+                # Fuzzy match: check if our stored team names appear in the MLB names or vice versa
+                def _teams_match(a: str, b: str) -> bool:
+                    a_words = set(a.split())
+                    b_words = set(b.split())
+                    return bool(a_words & b_words) or a in b or b in a
+
+                if not (_teams_match(home_team, g_home) and _teams_match(away_team, g_away)):
+                    if not (_teams_match(home_team, g_away) and _teams_match(away_team, g_home)):
+                        continue
+
+                # Determine winner
+                home_score = game.get("teams", {}).get("home", {}).get("score", 0) or 0
+                away_score = game.get("teams", {}).get("away", {}).get("score", 0) or 0
+
+                if home_score == away_score:
+                    continue  # tie / incomplete data
+
+                home_won = home_score > away_score
+                # Which team did we bet on?
+                bet_side = bet.get("side", "").lower()
+                # Map side to whether home won
+                if bet_side == "home":
+                    we_won = home_won
+                elif bet_side == "away":
+                    we_won = not home_won
+                else:
+                    # Fallback: check team name
+                    if _teams_match(bet_team, g_home):
+                        we_won = home_won
+                    elif _teams_match(bet_team, g_away):
+                        we_won = not home_won
+                    else:
+                        continue
+
+                price_cents = bet.get("price_cents", 50)
+                contracts   = bet.get("contracts", 1)
+                cost        = contracts * price_cents / 100
+
+                if we_won:
+                    pnl = round(contracts * (100 - price_cents) / 100, 2)
+                    bet["status"]  = "won"
+                    bet["result"]  = "win"
+                else:
+                    pnl = round(-cost, 2)
+                    bet["status"]  = "lost"
+                    bet["result"]  = "loss"
+
+                bet["pnl"]         = pnl
+                bet["resolved_at"] = datetime.now(timezone.utc).isoformat()
+                return True
+
+    except Exception as e:
+        print(f"[bet_log] MLB Stats API lookup failed for bet {bet.get('id')}: {e}")
+
+    return False
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def log_bet(home: str, away: str, team: str, side: str, ticker: str,
-            contracts: int, price_cents: int, vegas_prob: float, edge: float) -> dict:
-    """Record a new placed bet (status=pending)."""
+            contracts: int, price_cents: int, vegas_prob: float, edge: float,
+            game_id: str = None, game_date: str = None) -> dict:
+    """Record a new placed bet (status=pending). Bets accumulate and never reset."""
     bets = _load()
+    now_utc = datetime.now(timezone.utc)
     bet = {
         "id":          str(uuid.uuid4())[:8],
-        "timestamp":   datetime.now(timezone.utc).isoformat(),
+        "timestamp":   now_utc.isoformat(),
+        "date_placed": now_utc.strftime("%Y-%m-%d"),
+        "game_id":     game_id or "",
+        "game_date":   game_date or now_utc.strftime("%Y-%m-%d"),
         "home":        home,
         "away":        away,
+        "teams":       f"{away} @ {home}",
         "team":        team,
+        "team_bet_on": team,
+        "bet_side":    side,
         "side":        side,
         "ticker":      ticker,
         "contracts":   contracts,
         "price_cents": price_cents,
+        "cost":        round(contracts * price_cents / 100, 2),
         "vegas_prob":  vegas_prob,
         "edge":        edge,
         "status":      "pending",
+        "result":      "pending",
         "pnl":         None,
         "resolved_at": None,
     }
@@ -91,7 +200,7 @@ def log_bet(home: str, away: str, team: str, side: str, ticker: str,
 
 def resolve_pending(dry_run: bool = False) -> int:
     """
-    Check all pending bets against Kalshi market status.
+    Check all pending bets against MLB Stats API and Kalshi market status.
     Returns number of bets resolved.
     """
     import sys
@@ -104,6 +213,12 @@ def resolve_pending(dry_run: bool = False) -> int:
         if bet["status"] != "pending":
             continue
 
+        # Try MLB Stats API first (more reliable for completed games)
+        if _resolve_via_mlb_stats(bet):
+            resolved += 1
+            continue
+
+        # Fallback: Kalshi market finalization
         try:
             from kalshi.api import get_market
             mkt = get_market(bet["ticker"])
@@ -120,12 +235,13 @@ def resolve_pending(dry_run: bool = False) -> int:
                 pnl = round(-bet["contracts"] * bet["price_cents"] / 100, 2)
 
             bet["status"]      = "won" if won else "lost"
+            bet["result"]      = "win" if won else "loss"
             bet["pnl"]         = pnl
             bet["resolved_at"] = datetime.now(timezone.utc).isoformat()
             resolved += 1
 
         except Exception as e:
-            print(f"[bet_log] Could not resolve {bet['ticker']}: {e}")
+            print(f"[bet_log] Could not resolve {bet.get('ticker')}: {e}")
 
     if resolved:
         _save(bets)
@@ -133,7 +249,7 @@ def resolve_pending(dry_run: bool = False) -> int:
 
 
 def get_all_bets() -> list[dict]:
-    """Return all bets, auto-resolving pending ones first."""
+    """Return all bets (all historical), auto-resolving pending ones first."""
     resolve_pending()
     return _load()
 

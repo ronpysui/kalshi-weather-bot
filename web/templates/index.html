@@ -1028,6 +1028,7 @@
       <div class="section-title">baseball · mlb</div>
       <div style="display:flex;align-items:center;gap:12px">
         <span class="dim" style="font-size:11px">vegas consensus vs kalshi · pre-game EV</span>
+        <span style="font-size:10px;color:var(--text-dim)">bot scans: <span style="color:var(--cyan)">9AM–12PM CST</span> · every 30min</span>
         <span id="bb-refresh-label" class="dim" style="font-size:11px"></span>
         <button class="btn" onclick="loadBaseball(true)">↺ refresh</button>
       </div>
@@ -1905,12 +1906,14 @@ async function loadBaseball(manual = false) {
       fetchMLBStandings(),
     ]);
     const data     = await res.json();
+    let liveBalance = null;
+    liveBalance = data.bankroll || null;
     const betsData = await betsRes.json();
 
     let html = '';
 
     // ── Past Bets + PnL ───────────────────────────────────────────────────────
-    html += renderBaseballBets(betsData);
+    html += renderBaseballBets(betsData, liveBalance);
 
     // ── Odds key warning ─────────────────────────────────────────────────────
     if (!data.has_odds_key) {
@@ -1920,7 +1923,7 @@ async function loadBaseball(manual = false) {
           <div class="dim">Add your free API key from <b>the-odds-api.com</b> to Railway env vars as <b>ODDS_API_KEY</b></div>
         </div>`;
       el.innerHTML = html;
-      renderPnlChart(betsData, data && data.bankroll);
+      renderPnlChart(betsData, liveBalance);
       _bbStartCountdown();
       return;
     }
@@ -1928,7 +1931,7 @@ async function loadBaseball(manual = false) {
     if (data.error) {
       html += `<div class="empty-state" style="color:var(--red)">${data.error}</div>`;
       el.innerHTML = html;
-      renderPnlChart(betsData, data && data.bankroll);
+      renderPnlChart(betsData, liveBalance);
       _bbStartCountdown();
       return;
     }
@@ -2282,7 +2285,7 @@ async function loadBaseball(manual = false) {
     }
 
     el.innerHTML = html;
-    renderPnlChart(betsData, data && data.bankroll);
+    renderPnlChart(betsData, liveBalance);
     // Start next-game countdown AFTER DOM is updated so element exists
     if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].mins_to_game);
     // Start fast score refresh if any live games visible
@@ -2295,7 +2298,7 @@ async function loadBaseball(manual = false) {
   }
 }
 
-function renderBaseballBets(betsData) {
+function renderBaseballBets(betsData, liveBalance) {
   const s    = betsData.summary || {};
   const bets = betsData.bets   || [];
 
@@ -2386,7 +2389,7 @@ function renderBaseballBets(betsData) {
   if (resolved.length) {
     html += `
       <div class="panel-label" style="margin-bottom:12px">
-        PAST BETS &nbsp;<span class="dim" style="font-size:10px">auto-resolves from Kalshi results</span>
+        PAST BETS &nbsp;<span class="dim" style="font-size:10px">all historical bets · auto-resolved via MLB Stats API</span>
       </div>
       <div class="table-wrap" style="margin-bottom:24px">
         <table>
