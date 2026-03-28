@@ -1724,33 +1724,45 @@ function _bbStartCountdown() {
 // ── MLB live scores (free MLB Stats API, no key needed) ─────────────────────
 async function fetchMLBScores() {
   try {
-    const date = new Date().toLocaleDateString('en-CA', {timeZone: 'America/Chicago'});
-    const r = await fetch(
-      `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}&hydrate=linescore,teams`,
-      {signal: AbortSignal.timeout(5000)}
-    );
-    const d = await r.json();
+    const now      = new Date();
+    const today    = now.toLocaleDateString('en-CA', {timeZone: 'America/Chicago'});
+    const yday     = new Date(now - 864e5).toLocaleDateString('en-CA', {timeZone: 'America/Chicago'});
+
+    // Fetch today + yesterday so early-morning hours still show last night's results
+    const [r1, r2] = await Promise.all([
+      fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=linescore,teams`, {signal: AbortSignal.timeout(5000)}),
+      fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${yday}&hydrate=linescore,teams`,  {signal: AbortSignal.timeout(5000)}),
+    ]);
+    const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
+
     const scores = {};
-    for (const dateEntry of (d.dates || [])) {
-      for (const game of (dateEntry.games || [])) {
-        const away   = game.teams.away.team.name;
-        const home   = game.teams.home.team.name;
-        const key    = `${away}::${home}`;
-        const state  = game.status.detailedState || '';
-        const ls     = game.linescore || {};
-        scores[key] = {
-          status:     state,
-          done:       ['Final','Game Over','Completed Early'].some(s => state.includes(s)),
-          inProgress: state.includes('In Progress') || state.includes('Manager Challenge'),
-          awayScore:  game.teams.away.score ?? null,
-          homeScore:  game.teams.home.score ?? null,
-          inning:     ls.currentInning || null,
-          half:       ls.inningHalf || '',
-          awayName:   away,
-          homeName:   home,
-        };
+    const parseGames = (d, dateLabel) => {
+      for (const dateEntry of (d.dates || [])) {
+        for (const game of (dateEntry.games || [])) {
+          const away  = game.teams.away.team.name;
+          const home  = game.teams.home.team.name;
+          const key   = `${away}::${home}`;
+          const state = game.status.detailedState || '';
+          const ls    = game.linescore || {};
+          scores[key] = {
+            status:     state,
+            gameDate:   dateLabel,
+            done:       ['Final','Game Over','Completed Early'].some(s => state.includes(s)),
+            inProgress: state.includes('In Progress') || state.includes('Manager Challenge'),
+            awayScore:  game.teams.away.score ?? null,
+            homeScore:  game.teams.home.score ?? null,
+            inning:     ls.currentInning || null,
+            half:       ls.inningHalf || '',
+            awayName:   away,
+            homeName:   home,
+          };
+        }
       }
-    }
+    };
+
+    // Parse yesterday first so today overwrites if same game appears
+    parseGames(d2, yday);
+    parseGames(d1, today);
     return scores;
   } catch { return {}; }
 }
@@ -2094,58 +2106,83 @@ async function loadBaseball(manual = false) {
       html += renderSection(todayGames,    'TODAY',    new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
       html += renderSection(tomorrowGames, 'TOMORROW', new Date(Date.now()+864e5).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
 
-      // ── RESULTS: all completed games today ──────────────────────────────────
+      // ── RESULTS: completed games (today + yesterday) ─────────────────────────
       const completedGames = Object.values(mlbScores).filter(sc => sc.done && sc.awayScore !== null);
+      const todayStr = new Date().toLocaleDateString('en-CA', {timeZone:'America/Chicago'});
+      const ydayStr  = new Date(Date.now() - 864e5).toLocaleDateString('en-CA', {timeZone:'America/Chicago'});
       if (completedGames.length) {
+        // Group by date
+        const byDate = {};
+        for (const sc of completedGames) {
+          const d = sc.gameDate || todayStr;
+          if (!byDate[d]) byDate[d] = [];
+          byDate[d].push(sc);
+        }
+        const dateGroups = Object.keys(byDate).sort().reverse(); // newest first
+
         html += `
           <div style="margin-bottom:24px">
             <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;
                         padding-bottom:6px;border-bottom:1px solid var(--border)">
               <div class="panel-label" style="margin:0">RESULTS</div>
-              <span class="dim" style="font-size:10px">completed games today</span>
+              <span class="dim" style="font-size:10px">last 2 days</span>
             </div>
-            <table style="width:100%;border-collapse:collapse;font-size:11px">
-              <thead>
-                <tr style="color:var(--text-dim);border-bottom:1px solid var(--border)">
-                  <th style="padding:5px 8px;font-weight:400;text-align:left">MATCHUP</th>
-                  <th style="padding:5px 8px;font-weight:400;text-align:center">SCORE</th>
-                  <th style="padding:5px 8px;font-weight:400;text-align:left">WINNER</th>
-                  <th style="padding:5px 8px;font-weight:400;text-align:right">SEASON RECORD</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${completedGames.map(sc => {
-                  const winner    = sc.awayScore > sc.homeScore ? sc.awayName : sc.homeName;
-                  const awayWon   = sc.awayScore > sc.homeScore;
-                  const winnerRec = _record(standings, winner);
-                  const awayRec   = _record(standings, sc.awayName);
-                  const homeRec   = _record(standings, sc.homeName);
-                  return `
-                  <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
-                    <td style="padding:7px 8px">
-                      <div style="display:flex;align-items:center;gap:6px">
-                        <span style="color:${awayWon?'var(--text-bright)':'var(--text-dim)'};font-weight:${awayWon?'600':'400'}">${sc.awayName}</span>
-                        ${awayRec ? `<span style="font-size:9px;color:var(--text-dim)">${awayRec.w}-${awayRec.l}</span>` : ''}
-                        <span style="color:var(--text-dim)">@</span>
-                        <span style="color:${!awayWon?'var(--text-bright)':'var(--text-dim)'};font-weight:${!awayWon?'600':'400'}">${sc.homeName}</span>
-                        ${homeRec ? `<span style="font-size:9px;color:var(--text-dim)">${homeRec.w}-${homeRec.l}</span>` : ''}
-                      </div>
-                    </td>
-                    <td style="padding:7px 8px;text-align:center;font-variant-numeric:tabular-nums;
-                               font-weight:700;color:var(--cyan)">${sc.awayScore} – ${sc.homeScore}</td>
-                    <td style="padding:7px 8px;color:var(--green);font-weight:600">▶ ${winner}</td>
-                    <td style="padding:7px 8px;text-align:right">
-                      ${winnerRec && winnerRec.w + winnerRec.l > 0
-                        ? `<span style="color:${winnerRec.pct>=55?'var(--green)':winnerRec.pct>=45?'var(--text)':'var(--red)'};font-size:10px">
-                            ${winnerRec.w}-${winnerRec.l} &nbsp;${winnerRec.pct}% wins
-                           </span>
-                           <span style="font-size:9px;color:var(--text-dim);margin-left:4px">${winnerRec.season}</span>`
-                        : `<span class="dim" style="font-size:9px">—</span>`}
-                    </td>
-                  </tr>`;
-                }).join('')}
-              </tbody>
-            </table>
+            ${dateGroups.map(dateKey => {
+              const games    = byDate[dateKey];
+              const isToday  = dateKey === todayStr;
+              const isYday   = dateKey === ydayStr;
+              const dateDisp = isToday ? 'Today' : isYday ? 'Yesterday'
+                : new Date(dateKey + 'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+              return `
+              <div style="margin-bottom:16px">
+                <div style="font-size:10px;color:var(--text-dim);font-weight:600;letter-spacing:.08em;
+                            margin-bottom:6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+                  ${dateDisp.toUpperCase()}
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:11px">
+                  <thead>
+                    <tr style="color:rgba(255,255,255,0.3);font-size:9px;letter-spacing:.06em">
+                      <th style="padding:4px 8px;font-weight:400;text-align:left">MATCHUP</th>
+                      <th style="padding:4px 8px;font-weight:400;text-align:center">SCORE</th>
+                      <th style="padding:4px 8px;font-weight:400;text-align:left">WINNER</th>
+                      <th style="padding:4px 8px;font-weight:400;text-align:right">RECORD</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${games.map(sc => {
+                      const winner    = sc.awayScore > sc.homeScore ? sc.awayName : sc.homeName;
+                      const awayWon   = sc.awayScore > sc.homeScore;
+                      const winnerRec = _record(standings, winner);
+                      const awayRec   = _record(standings, sc.awayName);
+                      const homeRec   = _record(standings, sc.homeName);
+                      return `
+                      <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+                        <td style="padding:7px 8px">
+                          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+                            <span style="color:${awayWon?'var(--text-bright)':'var(--text-dim)'};font-weight:${awayWon?'600':'400'}">${sc.awayName}</span>
+                            ${awayRec ? `<span style="font-size:9px;color:rgba(255,255,255,0.25)">${awayRec.w}-${awayRec.l}</span>` : ''}
+                            <span style="color:var(--text-dim)">@</span>
+                            <span style="color:${!awayWon?'var(--text-bright)':'var(--text-dim)'};font-weight:${!awayWon?'600':'400'}">${sc.homeName}</span>
+                            ${homeRec ? `<span style="font-size:9px;color:rgba(255,255,255,0.25)">${homeRec.w}-${homeRec.l}</span>` : ''}
+                          </div>
+                        </td>
+                        <td style="padding:7px 8px;text-align:center;font-variant-numeric:tabular-nums;
+                                   font-weight:700;color:var(--cyan)">${sc.awayScore} – ${sc.homeScore}</td>
+                        <td style="padding:7px 8px;color:var(--green);font-weight:600">▶ ${winner}</td>
+                        <td style="padding:7px 8px;text-align:right">
+                          ${winnerRec && winnerRec.w + winnerRec.l > 0
+                            ? `<span style="color:${winnerRec.pct>=55?'var(--green)':winnerRec.pct>=45?'var(--text)':'var(--red)'};font-size:10px">
+                                ${winnerRec.w}-${winnerRec.l} &nbsp;${winnerRec.pct}%
+                               </span>
+                               <span style="font-size:8px;color:var(--text-dim);margin-left:3px">${winnerRec.season}</span>`
+                            : `<span class="dim" style="font-size:9px">—</span>`}
+                        </td>
+                      </tr>`;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>`;
+            }).join('')}
           </div>`;
       }
 
