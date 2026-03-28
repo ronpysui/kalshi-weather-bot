@@ -82,6 +82,8 @@ def _post(path: str, body: dict) -> dict:
         **_auth_headers("POST", "/trade-api/v2" + path),
     }
     resp = requests.post(url, headers=headers, json=body, timeout=10)
+    if not resp.ok:
+        print(f"[order] POST {path} → {resp.status_code}: {resp.text}")
     resp.raise_for_status()
     return resp.json()
 
@@ -199,13 +201,14 @@ def place_order(ticker: str, side: str, count: int,
               f"on {ticker} @ {price_cents}¢")
         return {"status": "dry_run"}
 
+    price_key = "yes_price" if side.lower() == "yes" else "no_price"
     body = {
         "ticker":     ticker,
         "action":     action,
         "side":       side,
         "type":       "limit",
         "count":      count,
-        "limit_price": price_cents,
+        price_key:    price_cents,
     }
     return _post("/portfolio/orders", body)
 

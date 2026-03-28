@@ -243,7 +243,7 @@ def run_baseball_once(bankroll: float) -> None:
         from baseball.kalshi_mlb  import get_mlb_events, match_to_odds
         from baseball.analyzer    import analyze_all
         from baseball.bet_log     import log_bet
-        from kalshi.api           import place_order, get_open_positions
+        from kalshi.api           import place_baseball_order, get_open_positions
 
         odds_games    = get_mlb_games()
         kalshi_events = get_mlb_events()
@@ -265,12 +265,16 @@ def run_baseball_once(bankroll: float) -> None:
             contracts   = max(1, int(bankroll * sig.kelly_frac / max(sig.kalshi_prob, 0.01)))
             price_cents = round(sig.kalshi_prob * 100)
 
-            place_order(
-                ticker      = sig.ticker,
-                side        = "yes",
-                count       = contracts,
-                price_cents = price_cents,
-            )
+            try:
+                place_baseball_order(
+                    ticker      = sig.ticker,
+                    side        = "yes",
+                    contracts   = contracts,
+                    price_cents = price_cents,
+                )
+            except Exception as e:
+                console.print(f"[red]Baseball order failed for {sig.ticker}: {e}[/]")
+                continue
 
             # Log to baseball bet tracker (shows in dashboard)
             log_bet(
