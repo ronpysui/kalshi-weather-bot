@@ -555,12 +555,16 @@ def api_baseball():
                 "side":      "home" if game_info and game_info.get("home_ticker") == ticker else "away",
             })
 
-        # Last bot scan timestamp
+        # Last bot scan timestamp — seed from web server if bot hasn't run yet
         try:
-            from main import get_last_scan_time
+            from main import get_last_scan_time, _record_scan_time
             last_scan = get_last_scan_time()
+            if not last_scan:
+                # First load since deploy — seed the timestamp so countdown starts
+                _record_scan_time()
+                last_scan = get_last_scan_time()
         except Exception:
-            last_scan = None
+            last_scan = datetime.now(ZoneInfo("UTC")).isoformat()
 
         return jsonify({
             "games":          games_out,
