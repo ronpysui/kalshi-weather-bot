@@ -1961,7 +1961,7 @@ async function loadBaseball(manual = false) {
 
       // ── Helper: render a single game card ────────────────────────────────────
       const TZ = 'America/Chicago';
-      const cstNow  = new Date().toLocaleDateString('en-US', {timeZone: TZ});
+      const cstNow  = new Date().toLocaleDateString('en-CA', {timeZone: TZ}); // ISO "2026-03-29" matches filter
 
       const renderGameCard = g => {
               const homeEdgeVal = g.home_edge || 0;
