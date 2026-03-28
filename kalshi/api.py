@@ -219,7 +219,8 @@ def get_open_positions() -> dict:
     Returns empty dict on error or if unauthenticated.
     """
     try:
-        data = _get("/portfolio/positions", params={"settlement_status": "unsettled", "limit": 1000}, auth=True)
+        data = _get("/portfolio/positions", params={"limit": 1000}, auth=True)
+        # Kalshi returns market_positions or positions depending on API version
         positions = data.get("market_positions", data.get("positions", []))
         result = {}
         for p in positions:
@@ -227,8 +228,8 @@ def get_open_positions() -> dict:
             qty    = p.get("position", p.get("quantity", 0))
             if not ticker or not qty or qty == 0:
                 continue
-            # market_exposure is net exposure in cents (negative for long YES)
-            # avg price per contract = |exposure| / contracts
+            # avg price per contract = total_traded (cents) / contracts
+            # total_traded is total $ spent in cents; market_exposure is net P&L exposure
             exposure = p.get("market_exposure", 0)
             total_traded = p.get("total_traded", 0)
             if total_traded and abs(qty) > 0:
@@ -242,7 +243,8 @@ def get_open_positions() -> dict:
                 "avg_price": round(avg, 1),  # cents e.g. 40.0
             }
         return result
-    except Exception:
+    except Exception as e:
+        print(f"[positions] Error fetching positions: {e}")
         return {}
 
 

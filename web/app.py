@@ -357,6 +357,7 @@ def api_baseball_debug():
     try:
         from baseball.odds_api import get_mlb_games
         from baseball.kalshi_mlb import get_mlb_events, get_open_mlb_markets, discover_mlb_series
+        from kalshi.api import _get
 
         odds_games    = get_mlb_games()
         series        = discover_mlb_series()
@@ -364,6 +365,12 @@ def api_baseball_debug():
         kalshi_events = get_mlb_events()
         positions     = get_open_positions()
         balance       = get_account_balance()
+
+        # Raw positions response for diagnostics
+        try:
+            raw_pos = _get("/portfolio/positions", params={"limit": 10}, auth=True)
+        except Exception as pe:
+            raw_pos = {"error": str(pe)}
 
         return jsonify({
             "odds_games_count":    len(odds_games),
@@ -373,6 +380,7 @@ def api_baseball_debug():
             "kalshi_sample":       raw_markets[:3] if raw_markets else [],
             "kalshi_events":       kalshi_events[:3],
             "open_positions":      positions,
+            "raw_positions_api":   raw_pos,
             "account_balance":     balance,
         })
     except Exception as e:
