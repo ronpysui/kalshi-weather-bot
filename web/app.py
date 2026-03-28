@@ -505,10 +505,34 @@ def api_baseball():
         except Exception:
             pass  # never break the API response
 
+        # Build positions summary from live Kalshi data (source of truth)
+        live_positions = []
+        for ticker, pos in positions.items():
+            if pos.get("quantity", 0) <= 0:
+                continue
+            # Find which game this belongs to
+            game_info = next((go for go in games_out
+                              if go.get("home_ticker") == ticker or go.get("away_ticker") == ticker), None)
+            avg_cents = int(round(pos.get("avg_price", 0)))
+            qty = pos["quantity"]
+            live_positions.append({
+                "ticker":    ticker,
+                "quantity":  qty,
+                "avg_price": avg_cents,
+                "cost":      round(qty * avg_cents / 100, 2),
+                "to_win":    round(qty * (100 - avg_cents) / 100, 2),
+                "home":      game_info["home"] if game_info else "",
+                "away":      game_info["away"] if game_info else "",
+                "team":      game_info["home"] if game_info and game_info.get("home_ticker") == ticker
+                             else game_info["away"] if game_info else ticker,
+                "side":      "home" if game_info and game_info.get("home_ticker") == ticker else "away",
+            })
+
         return jsonify({
-            "games":        games_out,
-            "bankroll":     bankroll,
-            "has_odds_key": bool(os.getenv("ODDS_API_KEY")),
+            "games":          games_out,
+            "positions":      live_positions,   # from Kalshi API (source of truth)
+            "bankroll":       bankroll,
+            "has_odds_key":   bool(os.getenv("ODDS_API_KEY")),
         })
     except Exception as e:
         return jsonify({"error": str(e), "games": [], "signals": []}), 500
@@ -539,7 +563,7 @@ def api_baseball_log_bet():
 def api_baseball_bet():
     """Place a baseball bet manually via the dashboard PLACE BET button."""
     from flask import request as req
-    from baseball.bet_log import log_bet
+    from baseball.bet_log import log_bet, _load as _load_bets
     try:
         body       = req.get_json()
         game_id    = body.get("game_id", "")
@@ -547,6 +571,12 @@ def api_baseball_bet():
         contracts  = int(body.get("contracts", 1))
         price      = int(body.get("price", 50))  # cents
         team_bet_on = body.get("team_bet_on", "")
+
+        # Duplicate check: don't place if we already have this game+side in the log
+        existing = _load_bets()
+        for b in existing:
+            if b.get("game_id") == game_id and b.get("side") == side and b.get("status") == "pending":
+                return jsonify({"success": True, "order_id": "already_placed", "note": "Duplicate prevented"})
 
         # Resolve the ticker and game metadata from matched games
         from baseball.odds_api import get_mlb_games

@@ -1912,8 +1912,8 @@ async function loadBaseball(manual = false) {
 
     let html = '';
 
-    // ── Past Bets + PnL ───────────────────────────────────────────────────────
-    html += renderBaseballBets(betsData, liveBalance);
+    // ── Past Bets + PnL (uses bet log for history) ──────────────────────────
+    html += renderBaseballBets(betsData, liveBalance, data.positions || []);
 
     // ── Odds key warning ─────────────────────────────────────────────────────
     if (!data.has_odds_key) {
@@ -2192,11 +2192,20 @@ async function loadBaseball(manual = false) {
         return s;
       };
 
-      html += `<div style="margin-bottom:24px">
+      // Bot scan info
+      const scanNote = `<div style="margin-bottom:8px;padding:4px 8px;background:rgba(0,212,255,0.04);
+                                     border:1px solid rgba(0,212,255,0.1);border-radius:4px;
+                                     display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:9px;color:var(--cyan)">🤖 Bot scans every 30 min · locks out 30min before pitch</span>
+        <span id="bb-dash-refresh" style="font-size:9px;color:var(--text-dim)">dashboard refreshes every 60s</span>
+      </div>`;
+
+      html += `<div style="margin-bottom:16px">
         ${nextBannerHtml}
+        ${scanNote}
         <div class="panel-label" style="margin-bottom:4px">
           SIGNALS &nbsp;<span class="dim" style="font-size:10px">edge > 4¢ highlighted · sorted by first pitch</span>
-          ${sigCount ? `<span style="margin-left:8px;font-size:10px;color:var(--green)">${sigCount} bet signal${sigCount>1?'s':''} today</span>` : ''}
+          ${sigCount ? `<span style="margin-left:8px;font-size:10px;color:var(--green)">${sigCount} signal${sigCount>1?'s':''}</span>` : ''}
         </div>
       </div>`;
 
@@ -2369,10 +2378,16 @@ async function logExistingBet(btn, gameId, side, contracts, priceCents, teamName
   }
 }
 
+const _bbPlacedGames = new Set(); // prevent double-click across the session
+
 async function placeBaseballBet(gameId, side, contracts, price, teamName) {
+  const key = `${gameId}-${side}`;
+  if (_bbPlacedGames.has(key)) return; // already placed this session
+  _bbPlacedGames.add(key);
+
   const btnId = `bet-btn-${gameId}-${side}`;
   const btn = document.getElementById(btnId);
-  if (btn) { btn.textContent = 'placing...'; btn.disabled = true; }
+  if (btn) { btn.textContent = 'placing...'; btn.disabled = true; btn.style.opacity = '0.5'; }
 
   try {
     const res = await fetch('/api/baseball/bet', {
@@ -2389,33 +2404,31 @@ async function placeBaseballBet(gameId, side, contracts, price, teamName) {
     const data = await res.json();
     if (data.success) {
       if (btn) {
-        btn.textContent = '✓ BET PLACED';
+        btn.textContent = '✓ ORDER SENT';
         btn.style.background = 'rgba(0,255,136,0.15)';
-        btn.style.color      = 'var(--green)';
-        btn.style.border     = '1px solid rgba(0,255,136,0.4)';
-        btn.disabled = false;
+        btn.style.color = 'var(--green)';
       }
-      setTimeout(() => loadBaseball(), 1000);
+      setTimeout(() => loadBaseball(), 1500);
     } else {
-      const msg = data.error || 'Unknown error';
+      _bbPlacedGames.delete(key); // allow retry on error
       if (btn) {
-        btn.textContent = `Error: ${msg}`;
+        btn.textContent = `Error: ${data.error || 'Failed'}`;
         btn.style.color = 'var(--red)';
-        btn.style.background = 'rgba(255,68,102,0.1)';
-        btn.disabled = false;
+        btn.disabled = false; btn.style.opacity = '1';
       }
     }
   } catch(e) {
+    _bbPlacedGames.delete(key);
     if (btn) {
       btn.textContent = `Error: ${e.message}`;
       btn.style.color = 'var(--red)';
-      btn.style.background = 'rgba(255,68,102,0.1)';
-      btn.disabled = false;
+      btn.disabled = false; btn.style.opacity = '1';
     }
   }
 }
 
-function renderBaseballBets(betsData, liveBalance) {
+function renderBaseballBets(betsData, liveBalance, livePositions) {
+  livePositions = livePositions || [];
   const s    = betsData.summary || {};
   const bets = betsData.bets   || [];
 
@@ -2468,10 +2481,32 @@ function renderBaseballBets(betsData, liveBalance) {
   const resolved = bets.filter(b => b.status !== 'pending');
 
   // ── Current Positions ─────────────────────────────────────────────────────
-  if (pending.length) {
+  // Use LIVE Kalshi positions (source of truth), not bet log
+  if (livePositions.length) {
     html += `
       <div class="panel-label" style="margin-bottom:8px">
-        OPEN POSITIONS &nbsp;<span class="bb-status bb-status-pending" style="vertical-align:middle">${pending.length}</span>
+        OPEN POSITIONS &nbsp;<span class="bb-status bb-status-pending" style="vertical-align:middle">${livePositions.length}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+        ${livePositions.map(p => `
+            <div style="padding:6px 8px;background:var(--bg2);border:1px solid rgba(255,215,0,0.15);border-radius:4px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+                <span style="font-size:11px;font-weight:700;color:var(--text-bright)">${p.team}</span>
+                <span class="bb-status bb-status-pending" style="font-size:8px">live</span>
+              </div>
+              <div class="dim" style="font-size:9px;margin-bottom:4px">${p.away} @ ${p.home}</div>
+              <div style="display:flex;gap:10px;font-size:9px">
+                <span>${p.quantity}x @ ${p.avg_price}¢</span>
+                <span style="color:var(--yellow)">cost $${p.cost.toFixed(2)}</span>
+                <span style="color:var(--green)">win +$${p.to_win.toFixed(2)}</span>
+              </div>
+            </div>`).join('')}
+      </div>`;
+  } else if (pending.length) {
+    // Fallback: show pending bets from log if Kalshi positions unavailable
+    html += `
+      <div class="panel-label" style="margin-bottom:8px">
+        PENDING BETS &nbsp;<span class="bb-status bb-status-pending" style="vertical-align:middle">${pending.length}</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
         ${pending.map(b => {
