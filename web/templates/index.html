@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KXHIGHNY // Kalshi Bot</title>
+  <title>Sports Predictor v1.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -129,40 +129,7 @@
       transition: width 1s linear;
     }
 
-    nav {
-      display: flex;
-      gap: 2px;
-    }
-
-    nav button {
-      background: none;
-      border: none;
-      color: var(--text-dim);
-      font-family: var(--mono);
-      font-size: 12px;
-      font-weight: 500;
-      padding: 6px 14px;
-      cursor: pointer;
-      border-radius: 4px;
-      transition: all 0.15s;
-      letter-spacing: 0.05em;
-    }
-
-    nav button:hover { color: var(--text-bright); background: var(--bg2); }
-    nav button.active { color: var(--green); background: rgba(0,255,136,0.08); }
-
-    /* ── City switcher ─────────────────────────────────────────────────────── */
-    .city-switcher {
-      display: flex; gap: 4px; margin-left: 12px;
-    }
-    .city-btn {
-      background: var(--bg2); border: 1px solid var(--border);
-      color: var(--text-dim); font-family: var(--mono); font-size: 11px;
-      font-weight: 600; padding: 3px 10px; border-radius: 4px;
-      cursor: pointer; letter-spacing: 0.05em; transition: all 0.15s;
-    }
-    .city-btn:hover { color: var(--cyan); border-color: var(--cyan-dim); }
-    .city-btn.active { color: var(--cyan); border-color: var(--cyan); background: rgba(0,212,255,0.08); }
+    /* nav and city-switcher removed — single-page layout */
 
     /* ── Layout ────────────────────────────────────────────────────────────── */
     main {
@@ -873,18 +840,8 @@
 <!-- ── Header ──────────────────────────────────────────────────────────────── -->
 <header>
   <div class="header-left">
-    <div class="logo" id="logo-text">KXHIGHNY <span>// nyc temp bot</span></div>
+    <div class="logo" id="logo-text">SPORTS PREDICTOR <span>v1.0</span></div>
     <div id="mode-tag" class="tag tag-dry">DRY RUN</div>
-  </div>
-  <nav>
-    <button class="active" onclick="showPage('live', this)">LIVE</button>
-    <button onclick="showPage('backtest', this)">BACKTEST</button>
-    <button onclick="showPage('baseball', this)">BASEBALL</button>
-    <button onclick="showPage('log', this)">TRADE LOG</button>
-  </nav>
-  <div class="city-switcher">
-    <button class="city-btn active" onclick="switchCity('NYC', this)">NYC</button>
-    <button class="city-btn" onclick="switchCity('HOU', this)">HOU</button>
   </div>
   <div class="header-right">
     <div class="refresh-countdown" id="countdown-wrap" style="display:none">
@@ -900,136 +857,13 @@
 <!-- ── Main ────────────────────────────────────────────────────────────────── -->
 <main>
 
-  <!-- ── LIVE PAGE ─────────────────────────────────────────────────────────── -->
-  <div id="page-live" class="page active">
-
-    <div class="section-header">
-      <div class="section-title">live market</div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span id="live-ts" class="dim" style="font-size:11px;"></span>
-        <button class="btn" id="btn-refresh-live" onclick="refreshLive()">↺ refresh</button>
-      </div>
-    </div>
-
-    <!-- ── FORECAST HERO ───────────────────────────────────────────────── -->
-    <div class="forecast-hero" id="forecast-hero">
-      <div class="fh-loading"><span class="spinner"></span> fetching forecast...</div>
-    </div>
-
-    <!-- ── BRACKET PROBABILITIES ──────────────────────────────────────── -->
-    <div class="panel" style="margin-top:16px;">
-      <div class="panel-header">
-        <div class="panel-title">bracket probabilities</div>
-        <div class="panel-meta" id="bracket-meta">based on morning forecast</div>
-      </div>
-      <div class="table-wrap">
-        <table id="bracket-table">
-          <thead>
-            <tr>
-              <th>Bracket</th>
-              <th>Probability</th>
-              <th style="width:40%"></th>
-              <th>Kalshi Price</th>
-            </tr>
-          </thead>
-          <tbody id="bracket-tbody">
-            <tr><td colspan="4" class="loading-overlay"><span class="spinner"></span>loading...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- ── 7-DAY FORECAST ─────────────────────────────────────────────── -->
-    <div class="panel" style="margin-top:16px;">
-      <div class="panel-header">
-        <div class="panel-title">7-day forecast</div>
-        <div class="panel-meta dim" id="forecast-source-label">NWS · NYC Central Park</div>
-      </div>
-      <div id="forecast-7day" style="display:flex;gap:8px;flex-wrap:wrap;padding:12px 0 4px;">
-        <div class="dim" style="padding:12px;">loading...</div>
-      </div>
-    </div>
-
-    <!-- ── TODAY'S SIGNALS ────────────────────────────────────────────── -->
-    <div class="panel" style="margin-top:16px;" id="signals-panel">
-      <div class="panel-header">
-        <div class="panel-title">today's signals</div>
-        <div class="panel-meta dim" id="signals-meta">forecast-aligned · fires when edge > 7c</div>
-      </div>
-      <div id="signals-body">
-        <div class="loading-overlay"><span class="spinner"></span>loading...</div>
-      </div>
-    </div>
-
-    <!-- hidden inputs kept for JS compat -->
-    <input type="hidden" id="bankroll-input" value="100">
-    <div style="display:none" id="bets-body"></div>
-    <div style="display:none" id="signals-container"></div>
-    <div style="display:none" id="card-forecast"></div>
-    <div style="display:none" id="card-sigma"></div>
-    <div style="display:none" id="card-current-temp"></div>
-    <div style="display:none" id="card-bankroll"></div>
-    <div style="display:none" id="card-minedge"></div>
-    <div style="display:none" id="card-signals"></div>
-    <div style="display:none" id="card-status"></div>
-    <div style="display:none" id="card-markets"></div>
-
-  </div>
-
-  <!-- ── BACKTEST PAGE ──────────────────────────────────────────────────────── -->
-  <div id="page-backtest" class="page">
-
-    <div class="section-header">
-      <div class="section-title">30-day backtest</div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span class="dim" style="font-size:11px;">forecast accuracy · open-meteo historical forecast vs actual kalshi outcome</span>
-        <button class="btn" id="btn-refresh-bt" onclick="refreshBacktest()">↺ re-run</button>
-      </div>
-    </div>
-
-    <div id="bt-loading" class="loading-overlay">
-      <span class="spinner"></span>fetching 30 days from kalshi...
-    </div>
-
-    <div id="bt-content" style="display:none">
-
-      <!-- W/L Summary -->
-      <div class="bt-wl-hero" id="bt-wl-hero"></div>
-
-      <!-- Day-by-day table -->
-      <div class="panel" style="margin-top:16px;">
-        <div class="panel-header">
-          <div class="panel-title">day-by-day results</div>
-          <div class="panel-meta dim" style="font-size:11px;">click any row to see bracket probabilities</div>
-        </div>
-        <div class="table-wrap">
-          <table id="bt-table">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Date</th>
-                <th>Actual High</th>
-                <th>Forecast Used</th>
-                <th>Model's Pick</th>
-                <th>Actual Bracket</th>
-                <th>Result</th>
-              </tr>
-            </thead>
-            <tbody id="bt-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ── BASEBALL PAGE ────────────────────────────────────────────────────── -->
-  <div id="page-baseball" class="page">
+  <!-- ── BASEBALL PAGE (main content) ───────────────────────────────────── -->
+  <div id="page-baseball" class="page active">
     <div class="section-header">
       <div class="section-title">baseball · mlb</div>
       <div style="display:flex;align-items:center;gap:12px">
         <span class="dim" style="font-size:11px">vegas consensus vs kalshi · pre-game EV</span>
-        <span style="font-size:10px;color:var(--text-dim)">bot scans: <span style="color:var(--cyan)">9AM–12PM CST</span> · every 30min</span>
+        <span style="font-size:10px;color:var(--text-dim)">bot scans: <span style="color:var(--cyan)">10AM–12AM ET</span> · every 10min</span>
         <span id="bb-refresh-label" class="dim" style="font-size:11px"></span>
         <button class="btn" onclick="loadBaseball(true)">↺ refresh</button>
       </div>
@@ -1037,19 +871,6 @@
 
     <div id="baseball-content" style="padding:0 24px 24px">
       <div class="dim" style="padding:40px;text-align:center">Loading MLB games...</div>
-    </div>
-  </div>
-
-  <!-- ── TRADE LOG PAGE ────────────────────────────────────────────────────── -->
-  <div id="page-log" class="page">
-    <div class="section-header">
-      <div class="section-title">trade log</div>
-      <button class="btn" onclick="loadTradeLog()">↺ refresh</button>
-    </div>
-    <div class="panel">
-      <div id="log-container">
-        <div class="loading-overlay"><span class="spinner"></span>loading...</div>
-      </div>
     </div>
   </div>
 
@@ -1079,49 +900,7 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-// ── City switcher ──────────────────────────────────────────────────────────
-let currentCity = 'NYC';
-
-const CITY_META = {
-  NYC: { ticker: 'KXHIGHNY',   label: 'nyc temp bot' },
-  HOU: { ticker: 'KXHIGHTHOU', label: 'houston temp bot' },
-};
-
-const CITY_STATION = {
-  NYC: 'NYC Central Park',
-  HOU: 'Houston Hobby (KHOU)',
-};
-
-function switchCity(city, btn) {
-  if (city === currentCity) return;
-  currentCity = city;
-  document.querySelectorAll('.city-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  const meta = CITY_META[city];
-  document.getElementById('logo-text').innerHTML = `${meta.ticker} <span>// ${meta.label}</span>`;
-  const lbl = document.getElementById('forecast-source-label');
-  if (lbl) lbl.textContent = `NWS · ${CITY_STATION[city]}`;
-  window._liveLoaded = false;
-  window._btLoaded   = false;
-  loadLive();
-}
-
-// ── Nav ────────────────────────────────────────────────────────────────────
-function showPage(name, btn) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
-  btn.classList.add('active');
-  if (name === 'backtest' && !window._btLoaded) loadBacktest();
-  if (name === 'baseball') { loadBaseball(true); }
-  else {
-    if (_bbRefreshTimer)  { clearInterval(_bbRefreshTimer);  _bbRefreshTimer  = null; }
-    if (_nextGameTimer)   { clearInterval(_nextGameTimer);   _nextGameTimer   = null; }
-    if (_liveScoreTimer)  { clearInterval(_liveScoreTimer);  _liveScoreTimer  = null; }
-    const lbl = document.getElementById('bb-refresh-label'); if (lbl) lbl.textContent = '';
-  }
-  if (name === 'log') loadTradeLog();
-}
+// ── City switcher / Nav removed — single-page baseball layout ─────────────
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const fmt = {
@@ -1143,535 +922,9 @@ function colorClass(v) {
   return 'dim';
 }
 
-// ── Bankroll ───────────────────────────────────────────────────────────────
-let _liveData   = null;   // last fetched live payload
-let _bankroll   = 100;
+// ── Weather bankroll/kelly removed — not used in baseball-only mode ────────
 
-function onBankrollChange(val) {
-  const n = parseFloat(val);
-  if (!n || n <= 0) return;
-  _bankroll = n;
-  document.getElementById('card-bankroll').textContent = '$' + n.toFixed(2);
-  if (_liveData) renderBetsBox(_liveData, n);
-}
-
-// ── Kelly sizing (client-side mirror) ──────────────────────────────────────
-function kellyContracts(ourProb, mktPrice, bankroll) {
-  if (mktPrice <= 0 || mktPrice >= 100) return 0;
-  const p  = ourProb / 100;
-  const pr = mktPrice / 100;
-  const b  = (1 - pr) / pr;
-  const f  = (p * b - (1 - p)) / b * 0.25;   // fractional Kelly
-  if (f <= 0) return 0;
-  return Math.max(1, Math.floor(bankroll * f));
-}
-
-// ── Next-bet countdown (ticks every second) ────────────────────────────────
-let _secsRemaining = null;
-
-function startBetCountdown(secs) {
-  _secsRemaining = secs;
-}
-
-setInterval(() => {
-  if (_secsRemaining === null || _secsRemaining <= 0) return;
-  _secsRemaining--;
-  const el = document.getElementById('next-bet-countdown');
-  if (!el) return;
-  const h = Math.floor(_secsRemaining / 3600);
-  const m = Math.floor((_secsRemaining % 3600) / 60);
-  const s = _secsRemaining % 60;
-  el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-}, 1000);
-
-// ── Bets box renderer ──────────────────────────────────────────────────────
-function renderBetsBox(d, bankroll) {
-  const body = document.getElementById('bets-body');
-
-  // ── Lock banner (always shown once prediction is locked) ──────────────────
-  const lk = d.lock;
-  let lockBanner = '';
-  if (lk) {
-    const lockedTime = lk.locked_at ? lk.locked_at.slice(11,16) : '--:--';
-    lockBanner = `
-      <div style="width:100%;margin-bottom:10px;display:flex;align-items:center;
-                  gap:12px;padding:8px 12px;background:rgba(0,255,136,0.05);
-                  border:1px solid rgba(0,255,136,0.15);border-radius:5px;">
-        <span style="color:var(--green);font-size:12px;font-weight:700;letter-spacing:.08em;">
-          🔒 PREDICTION LOCKED ${lockedTime} ET
-        </span>
-        <span class="dim" style="font-size:11px;">
-          forecast: <span style="color:var(--cyan)">${lk.forecast}°F</span>
-          &nbsp;·&nbsp; σ = ${lk.sigma}°F
-          &nbsp;·&nbsp; fixed for today
-        </span>
-      </div>`;
-  }
-
-  // ── BETS PLACED — show confirmed orders ───────────────────────────────────
-  if (d.bets_placed && lk && lk.bets && lk.bets.length > 0) {
-    body.innerHTML = lockBanner + `
-      <div style="display:flex;gap:12px;flex-wrap:wrap;width:100%">
-        ${lk.bets.map((b, i) => `
-          <div class="bet-card" style="border-color:rgba(0,255,136,0.2);">
-            <div class="bet-rank">#${i+1}</div>
-            <div class="bet-side ${b.side}">${b.side.toUpperCase()}</div>
-            <div class="bet-bracket">${b.label}</div>
-            <div class="bet-amount ${b.side}">$${(b.contracts * b.price / 100).toFixed(2)}</div>
-            <div class="bet-detail">${b.contracts} contract${b.contracts!==1?'s':''} @ ${b.price}c</div>
-            <div class="bet-meta">
-              <span class="bet-tag bet-tag-edge">edge +${b.edge}c</span>
-              <span class="bet-tag bet-tag-prob">${b.our_prob}% prob</span>
-            </div>
-            <div style="margin-top:10px;font-size:11px;color:var(--green);">&#10003; order placed</div>
-          </div>`).join('')}
-      </div>`;
-    return;
-  }
-
-  // ── NO SIGNALS ────────────────────────────────────────────────────────────
-  if (!d.signals || d.signals.length === 0) {
-    // Show bet window countdown when no signals
-    startBetCountdown(d.secs_to_bet);
-    const h = String(Math.floor(d.secs_to_bet/3600)).padStart(2,'0');
-    const m = String(Math.floor((d.secs_to_bet%3600)/60)).padStart(2,'0');
-    const s = String(d.secs_to_bet%60).padStart(2,'0');
-    body.innerHTML = lockBanner + `<div class="no-bets-box">
-      <span class="no-bets-icon">--</span>
-      <div>
-        <div style="color:var(--yellow);font-weight:600;margin-bottom:3px;">no signals today</div>
-        <div>No bracket clears the ${(d.min_edge*100).toFixed(0)}c edge threshold.</div>
-        ${!d.bets_placed ? `<div style="margin-top:6px;color:var(--text-dim);font-size:11px;">
-          Orders fire automatically at <span style="color:var(--cyan)">${d.bet_hour_et}:00 AM ET</span>
-          &nbsp;—&nbsp; <span id="next-bet-countdown">${h}:${m}:${s}</span>
-        </div>` : ''}
-      </div>
-    </div>`;
-    return;
-  }
-
-  // ── SIGNALS — always show with Kelly sizing ───────────────────────────────
-  // Compute bet window countdown for the sub-note
-  startBetCountdown(d.secs_to_bet);
-  const ch = String(Math.floor(d.secs_to_bet/3600)).padStart(2,'0');
-  const cm = String(Math.floor((d.secs_to_bet%3600)/60)).padStart(2,'0');
-  const cs = String(d.secs_to_bet%60).padStart(2,'0');
-  const betNote = `<div style="width:100%;padding:6px 2px;font-size:11px;color:var(--text-dim);">
-      &#9654; Bot scans every 30 min and fires each bet the moment edge clears ${(d.min_edge*100).toFixed(0)}¢ &nbsp;·&nbsp; each bracket bet only once per day
-    </div>`;
-
-  const cards = d.signals.map((s, i) => {
-    const contracts  = kellyContracts(s.our_prob, s.mkt_price, bankroll);
-    const riskDollars = (contracts * s.mkt_price / 100).toFixed(2);
-    const winDollars  = (contracts * (100 - s.mkt_price) / 100).toFixed(2);
-    const dryBadge    = d.dry_run ? '<span class="dry-badge">DRY</span>' : '';
-    const btnId       = `lock-btn-${i}`;
-    return `
-      <div class="bet-card">
-        <div class="bet-rank">#${i+1}</div>
-        <div class="bet-side ${s.side}">${s.side.toUpperCase()}</div>
-        <div class="bet-bracket">${s.label}</div>
-        <div class="bet-amount ${s.side}">$${riskDollars}</div>
-        <div class="bet-detail">${contracts} contract${contracts!==1?'s':''} @ ${s.mkt_price}c &nbsp;|&nbsp; to win $${winDollars}</div>
-        <div class="bet-meta">
-          <span class="bet-tag bet-tag-edge">edge +${s.edge}c</span>
-          <span class="bet-tag bet-tag-ev">EV +${s.ev}c</span>
-          <span class="bet-tag bet-tag-prob">${s.our_prob}% prob</span>
-        </div>
-        <button
-          id="${btnId}"
-          class="lock-btn ${s.side}"
-          onclick="lockIn('${s.ticker}','${s.side}',${contracts},${s.mkt_price},'${btnId}')"
-          ${contracts <= 0 ? 'disabled' : ''}
-        >
-          &#9632; place bet ${dryBadge}
-        </button>
-      </div>`;
-  }).join('');
-
-  body.innerHTML = lockBanner + betNote + `<div style="display:flex;gap:12px;flex-wrap:wrap;width:100%">${cards}</div>`;
-}
-
-// ── Lock-in handler ────────────────────────────────────────────────────────
-async function lockIn(ticker, side, contracts, priceCents, btnId) {
-  const btn = document.getElementById(btnId);
-  if (!btn || btn.disabled) return;
-  btn.disabled = true;
-  btn.textContent = '... placing...';
-
-  try {
-    const res = await fetch('/api/place_order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticker, side, contracts, price_cents: priceCents }),
-    });
-    const data = await res.json();
-    if (data.status === 'dry_run' || data.status === 'ok') {
-      btn.className = 'lock-btn placed';
-      btn.innerHTML = data.status === 'dry_run'
-        ? '&#10003; logged (dry run)'
-        : '&#10003; order placed';
-    } else {
-      btn.disabled = false;
-      btn.innerHTML = '&#9632; lock in bet';
-      alert('Order error: ' + (data.error || JSON.stringify(data)));
-    }
-  } catch(e) {
-    btn.disabled = false;
-    btn.innerHTML = '&#9632; lock in bet';
-    alert('Request failed: ' + e.message);
-  }
-}
-
-// ── Live ───────────────────────────────────────────────────────────────────
-async function loadLive() {
-  try {
-    const res = await fetch(`/api/live?city=${currentCity}`);
-    const d = await res.json();
-    if (d.error) { renderLiveError(d.error); return; }
-    renderLive(d);
-    ['card-forecast','card-current-temp','card-bankroll','card-signals'].forEach(flashEl);
-  } catch(e) {
-    renderLiveError(e.message);
-  }
-}
-
-function renderLive(d) {
-  _liveData = d;
-
-  // Mode tag
-  const tag = document.getElementById('mode-tag');
-  tag.textContent = d.dry_run ? 'DRY RUN' : 'LIVE';
-  tag.className = 'tag ' + (d.dry_run ? 'tag-dry' : 'tag-live');
-
-  document.getElementById('live-ts').textContent = d.timestamp;
-
-  // ── Forecast hero ──────────────────────────────────────────────────────────
-  const lk = d.lock;
-  const lockedAt = lk ? lk.locked_at.replace('T',' ').substring(0,16) + ' ET' : null;
-  const nowTemp  = d.current_temp != null ? `${d.current_temp}°F` : '--';
-  const hero = document.getElementById('forecast-hero');
-  hero.innerHTML = `
-    <div class="fh-main">
-      <div class="fh-label">NWS Predicted High · Today</div>
-      <div class="fh-temp">${d.forecast}°F</div>
-      <div class="fh-sigma">uncertainty ±${d.sigma}°F</div>
-    </div>
-    <div class="fh-divider"></div>
-    <div class="fh-stat">
-      <div class="fh-label">${(d.city || 'NYC')} Now</div>
-      <div class="fh-stat-val" style="color:#ff9900">${nowTemp}</div>
-      <div class="fh-stat-sub">live observed</div>
-    </div>
-    <div class="fh-divider"></div>
-    <div class="fh-stat">
-      <div class="fh-label">Brackets</div>
-      <div class="fh-stat-val cyan">${d.brackets.length}</div>
-      <div class="fh-stat-sub">open on Kalshi</div>
-    </div>
-    ${lockedAt ? `<div class="fh-lock">forecast locked<br><strong>${lockedAt}</strong><br><span>fixed for today</span></div>` : ''}
-    <div class="fh-divider"></div>
-    <div class="fh-stat">
-      <div class="fh-label">Kalshi Balance</div>
-      <div class="fh-stat-val" style="color:var(--green)">$${d.bankroll != null ? d.bankroll.toFixed(2) : '--'}</div>
-      <div class="fh-stat-sub">${d.dry_run ? 'dry run' : 'live account'}</div>
-    </div>
-    <div class="fh-divider"></div>
-    <div class="fh-stat">
-      <div class="fh-label">Next Market Open</div>
-      <div class="fh-stat-val" id="market-open-countdown" style="color:var(--cyan);font-size:1.3rem;letter-spacing:.05em;">--:--:--</div>
-      <div class="fh-stat-sub">6:00 AM ET</div>
-    </div>
-  `;
-
-  // ── Bracket probability table ──────────────────────────────────────────────
-  const maxProb = Math.max(...d.brackets.map(b => b.our_prob));
-  document.getElementById('bracket-meta').textContent =
-    `based on N(${d.forecast}°F, σ=${d.sigma}°F) · morning forecast`;
-
-  // ── 7-day forecast strip ───────────────────────────────────────────────────
-  render7Day(d.forecast_7day || []);
-
-  // ── Signals panel ──────────────────────────────────────────────────────────
-  renderSignals(d);
-
-  const tbody = document.getElementById('bracket-tbody');
-  tbody.innerHTML = d.brackets.map(b => {
-    const isTop = b.our_prob === maxProb;
-    const barColor = isTop ? 'var(--green)' : 'var(--cyan)';
-    const rowCls   = isTop ? 'bracket-top' : '';
-    // Kalshi YES price — what the market thinks the prob is
-    const mktProb  = b.mkt_yes;
-    return `
-    <tr class="${rowCls}">
-      <td style="${isTop ? 'color:var(--green);font-weight:700' : ''}">${b.label}${isTop ? ' ←' : ''}</td>
-      <td style="font-weight:700;color:${isTop ? 'var(--green)' : 'var(--cyan)'};width:70px">${b.our_prob}%</td>
-      <td>
-        <div class="prob-bar-wrap">
-          <div class="prob-bar" style="width:${Math.min(b.our_prob, 100)}%;background:${barColor}"></div>
-        </div>
-      </td>
-      <td class="dim" style="width:100px;text-align:right">${mktProb}c market</td>
-    </tr>`;
-  }).join('');
-}
-
-function renderLiveError(msg) {
-  document.getElementById('forecast-hero').innerHTML =
-    `<div class="fh-loading" style="color:var(--red)">${msg}</div>`;
-  document.getElementById('bracket-tbody').innerHTML =
-    `<tr><td colspan="4" style="padding:24px;color:var(--red);text-align:center">${msg}</td></tr>`;
-}
-
-// ── 7-day forecast renderer ────────────────────────────────────────────────
-function render7Day(days) {
-  const el = document.getElementById('forecast-7day');
-  if (!days || days.length === 0) {
-    el.innerHTML = '<div class="dim" style="padding:12px;">No forecast data</div>';
-    return;
-  }
-  el.innerHTML = days.map(d => {
-    const isTomorrow = d.is_tomorrow;
-    const isToday    = d.is_today;
-    const border     = isTomorrow ? '2px solid var(--cyan)'
-                     : isToday    ? '2px solid var(--green)'
-                     :              '1px solid rgba(255,255,255,0.07)';
-    const bg         = isTomorrow ? 'rgba(0,212,255,0.07)'
-                     : isToday    ? 'rgba(0,255,136,0.05)'
-                     :              'rgba(255,255,255,0.02)';
-    const labelColor = isTomorrow ? 'var(--cyan)'
-                     : isToday    ? 'var(--green)'
-                     :              'var(--text-dim)';
-    const badge      = isTomorrow ? '<span style="font-size:9px;background:var(--cyan);color:#000;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:4px;">NEXT</span>'
-                     : isToday    ? '<span style="font-size:9px;background:var(--green);color:#000;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:4px;">TODAY</span>'
-                     : '';
-    return `
-      <div style="flex:1;min-width:100px;max-width:140px;padding:10px 12px;border-radius:6px;
-                  border:${border};background:${bg};text-align:center;">
-        <div style="font-size:11px;color:${labelColor};font-weight:600;letter-spacing:.05em;">
-          ${d.label.toUpperCase()}${badge}
-        </div>
-        <div style="font-size:10px;color:var(--text-dim);margin-top:6px;letter-spacing:.05em;">HIGH</div>
-        <div style="font-size:1.6rem;font-weight:700;color:var(--fg);margin:2px 0 6px;">
-          ${d.high}°F
-        </div>
-        <div style="font-size:10px;color:var(--text-dim);line-height:1.3;">
-          ${d.short_forecast}
-        </div>
-      </div>`;
-  }).join('');
-}
-
-// ── Signals renderer ───────────────────────────────────────────────────────
-function renderSignals(d) {
-  const el  = document.getElementById('signals-body');
-  const meta = document.getElementById('signals-meta');
-  const sigs = d.signals || [];
-  const lk   = d.lock;
-
-  // Lock banner
-  let lockBanner = '';
-  if (lk) {
-    const t = lk.locked_at ? lk.locked_at.slice(11,16) : '--:--';
-    lockBanner = `<div style="margin-bottom:12px;padding:7px 12px;background:rgba(0,255,136,0.05);
-                  border:1px solid rgba(0,255,136,0.15);border-radius:5px;font-size:11px;display:flex;gap:14px;align-items:center;">
-      <span style="color:var(--green);font-weight:700;letter-spacing:.07em;">&#128274; PREDICTION LOCKED ${t} ET</span>
-      <span class="dim">forecast: <span style="color:var(--cyan)">${lk.forecast}°F</span> &nbsp;·&nbsp; &sigma; = ${lk.sigma}°F &nbsp;·&nbsp; fixed for today</span>
-    </div>`;
-  }
-
-  // No signals
-  if (sigs.length === 0) {
-    meta.textContent = 'no edge opportunities right now';
-    el.innerHTML = lockBanner + `<div style="padding:28px;color:var(--text-dim);text-align:center;">
-      No bracket clears the ${(d.min_edge*100).toFixed(0)}¢ edge threshold — Kalshi is fairly priced today.
-    </div>`;
-    return;
-  }
-
-  meta.textContent = `${sigs.length} forecast-aligned signal${sigs.length>1?'s':''} · edge > ${(d.min_edge*100).toFixed(0)}¢`;
-
-  // Bets placed banner
-  if (d.bets_placed && lk && lk.bets && lk.bets.length > 0) {
-    const placed = lk.bets.map((b,i) => `
-      <div class="bet-card" style="border-color:rgba(0,255,136,0.3);">
-        <div class="bet-rank">#${i+1}</div>
-        <div class="bet-side ${b.side}">${b.side.toUpperCase()}</div>
-        <div class="bet-bracket">${b.label}</div>
-        <div class="bet-amount ${b.side}">$${(b.contracts * b.price/100).toFixed(2)}</div>
-        <div class="bet-detail">${b.contracts} contract${b.contracts!==1?'s':''} @ ${b.price}c</div>
-        <div class="bet-meta">
-          <span class="bet-tag bet-tag-edge">edge +${b.edge}c</span>
-          <span class="bet-tag bet-tag-prob">${b.our_prob}% prob</span>
-        </div>
-        <div style="margin-top:8px;font-size:11px;color:var(--green);">&#10003; order placed</div>
-      </div>`).join('');
-    el.innerHTML = lockBanner + `<div style="display:flex;gap:12px;flex-wrap:wrap;">${placed}</div>`;
-    return;
-  }
-
-  // Signal cards
-  const cards = sigs.map((s, i) => {
-    const bankroll   = parseFloat(document.getElementById('bankroll-input').value) || 100;
-    const contracts  = kellyContracts(s.our_prob, s.mkt_price, bankroll);
-    const riskUSD    = (contracts * s.mkt_price / 100).toFixed(2);
-    const winUSD     = (contracts * (100 - s.mkt_price) / 100).toFixed(2);
-    const dryBadge   = d.dry_run ? '<span class="dry-badge">DRY</span>' : '';
-    const btnId      = `sig-btn-${i}`;
-    const edgeCls    = s.edge >= 20 ? 'edge-high' : s.edge >= 10 ? 'edge-med' : 'edge-low';
-    return `
-      <div class="bet-card">
-        <div class="bet-rank">#${i+1}</div>
-        <div class="bet-side ${s.side}">${s.side.toUpperCase()}</div>
-        <div class="bet-bracket">${s.label}</div>
-        <div class="bet-amount ${s.side}">$${riskUSD}</div>
-        <div class="bet-detail">${contracts} contract${contracts!==1?'s':''} @ ${s.mkt_price}c &nbsp;|&nbsp; to win $${winUSD}</div>
-        <div class="bet-meta">
-          <span class="bet-tag bet-tag-edge ${edgeCls}">edge +${s.edge}c</span>
-          <span class="bet-tag bet-tag-ev">EV +${s.ev}c</span>
-          <span class="bet-tag bet-tag-prob">${s.our_prob}% prob</span>
-        </div>
-        <button id="${btnId}" class="lock-btn ${s.side}"
-          onclick="lockIn('${s.ticker}','${s.side}',${contracts},${s.mkt_price},'${btnId}')"
-          ${contracts <= 0 ? 'disabled' : ''}>
-          &#9632; place bet ${dryBadge}
-        </button>
-      </div>`;
-  }).join('');
-
-  el.innerHTML = lockBanner + `<div style="display:flex;gap:12px;flex-wrap:wrap;">${cards}</div>`;
-}
-
-
-async function refreshLive() {
-  const btn = document.getElementById('btn-refresh-live');
-  btn.classList.add('loading');
-  btn.textContent = '↺ refreshing...';
-  await fetch(`/api/refresh/live?city=${currentCity}`);
-  await new Promise(r => setTimeout(r, 1500));
-  await loadLive();
-  btn.classList.remove('loading');
-  btn.textContent = '↺ refresh';
-}
-
-// ── Backtest ───────────────────────────────────────────────────────────────
-async function loadBacktest() {
-  document.getElementById('bt-loading').style.display = 'block';
-  document.getElementById('bt-content').style.display = 'none';
-  try {
-    const res = await fetch('/api/backtest');
-    const d = await res.json();
-    if (d.error) { alert('Backtest error: ' + d.error); return; }
-    renderBacktest(d);
-    window._btLoaded = true;
-  } catch(e) {
-    alert('Error: ' + e.message);
-  } finally {
-    document.getElementById('bt-loading').style.display = 'none';
-    document.getElementById('bt-content').style.display = 'block';
-  }
-}
-
-function renderBacktest(d) {
-  const s = d.summary;
-  const wrColor = s.win_rate >= 50 ? 'var(--green)' : s.win_rate >= 35 ? 'var(--yellow)' : 'var(--red)';
-
-  // W/L hero
-  document.getElementById('bt-wl-hero').innerHTML = `
-    <div class="bt-wl-stat">
-      <div class="bt-wl-label">Win Rate</div>
-      <div class="bt-wl-val" style="color:${wrColor}">${s.win_rate}%</div>
-      <div class="bt-wl-sub">${s.wins}W · ${s.losses}L · ${s.total_days} days</div>
-    </div>
-    <div class="bt-wl-divider"></div>
-    <div class="bt-wl-stat">
-      <div class="bt-wl-label">Wins</div>
-      <div class="bt-wl-val" style="color:var(--green)">${s.wins}</div>
-      <div class="bt-wl-sub">correct bracket</div>
-    </div>
-    <div class="bt-wl-divider"></div>
-    <div class="bt-wl-stat">
-      <div class="bt-wl-label">Losses</div>
-      <div class="bt-wl-val" style="color:var(--red)">${s.losses}</div>
-      <div class="bt-wl-sub">wrong bracket</div>
-    </div>
-    <div class="bt-wl-note">
-      Forecast = Open-Meteo historical model for that day.<br>
-      Model picks the highest-probability bracket.<br>
-      W = model's pick matched Kalshi's settled bracket.
-    </div>
-  `;
-
-  // Day table with clickable rows
-  const tbody = document.getElementById('bt-tbody');
-  tbody.innerHTML = '';
-
-  d.days.forEach((r, i) => {
-    const rowCls = r.correct ? 'bt-row-win' : 'bt-row-loss';
-    const badge  = r.correct
-      ? '<span class="bt-badge-win">WIN</span>'
-      : '<span class="bt-badge-loss">LOSS</span>';
-    const expandId = `bt-exp-${i}`;
-
-    const mainRow = document.createElement('tr');
-    mainRow.className = rowCls;
-    mainRow.style.cursor = 'pointer';
-    mainRow.innerHTML = `
-      <td style="color:var(--text-dim);font-size:11px">▶</td>
-      <td>${r.date}</td>
-      <td class="yellow">${r.actual}°F</td>
-      <td class="dim">${r.forecast}°F <span style="font-size:10px;color:var(--text-dim)">(${r.forecast_src})</span></td>
-      <td class="cyan">${r.top_bracket}</td>
-      <td>${r.correct_bracket}</td>
-      <td>${badge}</td>
-    `;
-
-    const expandRow = document.createElement('tr');
-    expandRow.id = expandId;
-    expandRow.className = 'bt-expand';
-    expandRow.style.display = 'none';
-    expandRow.innerHTML = `<td colspan="7">${buildBracketGrid(r.brackets)}</td>`;
-
-    mainRow.addEventListener('click', () => {
-      const open = expandRow.style.display !== 'none';
-      expandRow.style.display = open ? 'none' : 'table-row';
-      mainRow.querySelector('td:first-child').textContent = open ? '▶' : '▼';
-    });
-
-    tbody.appendChild(mainRow);
-    tbody.appendChild(expandRow);
-  });
-}
-
-function buildBracketGrid(brackets) {
-  const rows = brackets.map(b => {
-    const barColor = b.is_win ? 'var(--green)' : b.is_top ? 'var(--cyan)' : 'rgba(255,255,255,0.2)';
-    const labelStyle = b.is_win ? 'color:var(--green);font-weight:700'
-                     : b.is_top ? 'color:var(--cyan)'
-                     : 'color:var(--text-dim)';
-    const tag = b.is_win && b.is_top ? ' ✓' : b.is_win ? ' ✓' : b.is_top ? ' ←model' : '';
-    return `
-      <div class="bt-bracket-row">
-        <div class="bt-bracket-label" style="${labelStyle}">${b.label}${tag}</div>
-        <div class="bt-bracket-pct" style="color:${barColor}">${b.prob}%</div>
-        <div class="bt-bracket-bar-wrap">
-          <div class="bt-bracket-bar" style="width:${Math.min(b.prob,100)}%;background:${barColor}"></div>
-        </div>
-      </div>`;
-  }).join('');
-  return `<div class="bt-bracket-grid">${rows}</div>`;
-}
-
-async function refreshBacktest() {
-  const btn = document.getElementById('btn-refresh-bt');
-  btn.classList.add('loading');
-  btn.textContent = '↺ running...';
-  window._btLoaded = false;
-  await fetch('/api/refresh/backtest');
-  await loadBacktest();
-  btn.classList.remove('loading');
-  btn.textContent = '↺ re-run';
-}
+// ── Weather bet countdown removed ──────────────────────────────────────────
 
 // ── Trade log ──────────────────────────────────────────────────────────────
 let _bbPnlChart        = null;
@@ -2017,9 +1270,9 @@ async function loadBaseball(manual = false) {
                                 : hasEdge ? `<span style="font-size:10px;font-weight:700;color:var(--green)">● BET</span>`
                                 :           `<span style="font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:.05em">NO EDGE</span>`;
 
-              // Bot window: 9AM–12PM CST
-              const cstHour = parseInt(new Date().toLocaleString('en-US', {timeZone: 'America/Chicago', hour: 'numeric', hour12: false}), 10);
-              const botOpen = cstHour >= 9 && cstHour < 12;
+              // Bot window: 10AM–12AM ET
+              const etHour = parseInt(new Date().toLocaleString('en-US', {timeZone: 'America/New_York', hour: 'numeric', hour12: false}), 10);
+              const botOpen = etHour >= 10 || etHour < 0;
 
               // Position row (home or away)
               const homeTicker = g.home_ticker || '';
@@ -2218,7 +1471,7 @@ async function loadBaseball(manual = false) {
 
       // Bot scan countdown
       const lastScan     = data.last_scan;
-      const pollInterval = data.poll_interval || 1800; // seconds (default 30 min)
+      const pollInterval = data.poll_interval || 600; // seconds (default 10 min)
       let scanCountdown  = '';
       if (lastScan) {
         const lastMs = new Date(lastScan).getTime();
@@ -2729,45 +1982,7 @@ async function bbPlaceBet(btn, ticker, home, away, team, side, contracts, priceC
   }
 }
 
-async function loadTradeLog() {
-  const container = document.getElementById('log-container');
-  container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span>loading...</div>';
-  try {
-    const res = await fetch('/api/tradelog');
-    const rows = await res.json();
-    if (!rows.length) {
-      container.innerHTML = '<div class="empty-state">no trades logged yet.<br><span class="dim">run the live bot to populate this.</span></div>';
-      return;
-    }
-    container.innerHTML = `
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Timestamp</th><th>Ticker</th><th>Side</th>
-              <th>Contracts</th><th>Price</th><th>Edge</th>
-              <th>Our Prob</th><th>Dry Run</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.reverse().map(r => `
-              <tr>
-                <td class="dim">${r.timestamp}</td>
-                <td>${r.ticker}</td>
-                <td class="side-${r.side}">${r.side.toUpperCase()}</td>
-                <td>${r.contracts}</td>
-                <td class="dim">${r.price_cents}c</td>
-                <td class="green">+${r.edge_cents}c</td>
-                <td class="cyan">${(r.our_prob * 100).toFixed(1)}%</td>
-                <td class="${r.dry_run === 'True' ? 'yellow' : 'green'}">${r.dry_run === 'True' ? 'yes' : 'LIVE'}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
-  } catch(e) {
-    container.innerHTML = `<div class="empty-state" style="color:var(--red)">${e.message}</div>`;
-  }
-}
+// loadTradeLog removed — no trade log page
 
 // ── Auto-refresh countdown (5 min) ────────────────────────────────────────
 const REFRESH_SECS = 300;
@@ -2790,7 +2005,8 @@ function tickCountdown() {
 
   if (_countdown <= 0) {
     _countdownActive = false;
-    loadLive().then(startCountdown);
+    // no-op: auto-refresh handled by baseball's own _bbStartCountdown
+    _countdownActive = false;
   }
 }
 setInterval(tickCountdown, 1000);
@@ -2805,7 +2021,7 @@ function flashEl(id) {
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
-loadLive().then(startCountdown);
+loadBaseball(true);
 </script>
 </body>
 </html>
