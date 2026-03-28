@@ -1113,8 +1113,9 @@ function showPage(name, btn) {
   if (name === 'backtest' && !window._btLoaded) loadBacktest();
   if (name === 'baseball') { loadBaseball(true); }
   else {
-    if (_bbRefreshTimer) { clearInterval(_bbRefreshTimer); _bbRefreshTimer = null; }
-    if (_nextGameTimer)  { clearInterval(_nextGameTimer);  _nextGameTimer  = null; }
+    if (_bbRefreshTimer)  { clearInterval(_bbRefreshTimer);  _bbRefreshTimer  = null; }
+    if (_nextGameTimer)   { clearInterval(_nextGameTimer);   _nextGameTimer   = null; }
+    if (_liveScoreTimer)  { clearInterval(_liveScoreTimer);  _liveScoreTimer  = null; }
     const lbl = document.getElementById('bb-refresh-label'); if (lbl) lbl.textContent = '';
   }
   if (name === 'log') loadTradeLog();
@@ -1676,6 +1677,43 @@ let _bbRefreshTimer    = null;
 let _bbCountdown       = 0;
 const BB_REFRESH_SEC   = 60;
 
+// ── Fast live-score refresh (20s) when games are in progress ─────────────────
+let _liveScoreTimer = null;
+
+async function _refreshLiveScores() {
+  const liveCards = document.querySelectorAll('[data-live-game]');
+  if (!liveCards.length) { clearInterval(_liveScoreTimer); _liveScoreTimer = null; return; }
+  const scores = await fetchMLBScores();
+  liveCards.forEach(card => {
+    const away = card.dataset.away;
+    const home = card.dataset.home;
+    const sc   = _scoreKey(scores, away, home);
+    if (!sc) return;
+    const scoreEl = card.querySelector('.live-score');
+    const situEl  = card.querySelector('.live-situ');
+    const winnerEl = card.querySelector('.live-winner');
+    if (scoreEl && sc.awayScore !== null) {
+      scoreEl.textContent = `${sc.awayScore} – ${sc.homeScore}`;
+      scoreEl.style.color = 'var(--cyan)';
+    }
+    if (situEl) {
+      situEl.textContent = sc.done ? 'Final'
+        : sc.inning ? `${sc.half === 'Bottom' ? '▼' : '▲'}${sc.inning}`
+        : 'In Progress';
+    }
+    if (winnerEl && sc.done && sc.awayScore !== null) {
+      const winner = sc.awayScore > sc.homeScore ? away : home;
+      winnerEl.textContent = `▶ ${winner}`;
+      winnerEl.style.display = '';
+    }
+  });
+}
+
+function _startLiveScoreTimer() {
+  if (_liveScoreTimer) clearInterval(_liveScoreTimer);
+  _liveScoreTimer = setInterval(_refreshLiveScores, 20000);
+}
+
 // ── Next-game countdown (ticks every second) ────────────────────────────────
 let _nextGameTimer     = null;
 let _nextGameEpoch     = null;   // ms epoch of next game's first pitch
@@ -1837,14 +1875,18 @@ function _recordBadge(rec) {
 
 // Fuzzy score lookup: find the best key match for away@home team names
 function _scoreKey(scores, away, home) {
-  // exact
   const exact = `${away}::${home}`;
   if (scores[exact]) return scores[exact];
-  // partial match
+  // Try matching by last word of team name (e.g. "Dodgers", "Pirates")
+  const awayLast = away.split(' ').pop().toLowerCase();
+  const homeLast = home.split(' ').pop().toLowerCase();
   for (const k of Object.keys(scores)) {
     const [ka, kh] = k.split('::');
-    if ((ka.includes(away.split(' ').pop()) || away.includes(ka.split(' ').pop())) &&
-        (kh.includes(home.split(' ').pop()) || home.includes(kh.split(' ').pop())))
+    if (!ka || !kh) continue;
+    const kaLast = ka.split(' ').pop().toLowerCase();
+    const khLast = kh.split(' ').pop().toLowerCase();
+    if ((kaLast === awayLast || ka.toLowerCase().includes(awayLast)) &&
+        (khLast === homeLast || kh.toLowerCase().includes(homeLast)))
       return scores[k];
   }
   return null;
@@ -2032,12 +2074,15 @@ async function loadBaseball(manual = false) {
       };  // end renderGameCard
 
       // ── Split games into TODAY / TOMORROW groups ──────────────────────────
+      // cstNow uses 'en-CA' (ISO: "2026-03-28") — must match in filter too
       const todayGames    = data.games.filter(g => {
-        const d = new Date(g.commence).toLocaleDateString('en-US', {timeZone: TZ});
+        if (g.mins_to_game <= 0) return true; // live games always TODAY
+        const d = new Date(g.commence).toLocaleDateString('en-CA', {timeZone: TZ});
         return d === cstNow;
       });
       const tomorrowGames = data.games.filter(g => {
-        const d = new Date(g.commence).toLocaleDateString('en-US', {timeZone: TZ});
+        if (g.mins_to_game <= 0) return false; // live games excluded from TOMORROW
+        const d = new Date(g.commence).toLocaleDateString('en-CA', {timeZone: TZ});
         return d !== cstNow;
       });
 
@@ -2079,17 +2124,20 @@ async function loadBaseball(manual = false) {
                 ? (sc.awayScore > sc.homeScore ? sc.awayName : sc.homeName)
                 : null;
               return `
-              <div style="padding:8px 14px;background:${bg};border:1px solid ${bd};
+              <div data-live-game="1" data-away="${g.away}" data-home="${g.home}"
+                   style="padding:8px 14px;background:${bg};border:1px solid ${bd};
                           border-radius:6px;font-size:11px;min-width:220px">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
                   ${badge}
-                  <span class="dim" style="font-size:9px">${situStr}</span>
+                  <span class="live-situ dim" style="font-size:9px">${situStr}</span>
                 </div>
                 <div style="color:var(--text-bright);font-weight:600;margin-bottom:2px">${g.away} @ ${g.home}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center">
-                  <span style="font-size:16px;font-weight:700;color:${done ? 'var(--cyan)' : 'var(--text)'};
+                  <span class="live-score" style="font-size:16px;font-weight:700;
+                               color:${done ? 'var(--cyan)' : 'var(--text)'};
                                font-variant-numeric:tabular-nums">${scoreStr}</span>
-                  ${winner ? `<span style="font-size:10px;color:var(--green)">▶ ${winner}</span>` : ''}
+                  <span class="live-winner" style="font-size:10px;color:var(--green);
+                               display:${winner ? '' : 'none'}">${winner ? `▶ ${winner}` : ''}</span>
                 </div>
               </div>`;
             }).join('')}
@@ -2227,6 +2275,8 @@ async function loadBaseball(manual = false) {
     renderPnlChart(betsData);
     // Start next-game countdown AFTER DOM is updated so element exists
     if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].mins_to_game);
+    // Start fast score refresh if any live games visible
+    if (data.games && data.games.some(g => g.mins_to_game <= 0)) _startLiveScoreTimer();
     _bbStartCountdown();
   } catch(e) {
     document.getElementById('baseball-content').innerHTML =
