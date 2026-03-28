@@ -361,7 +361,14 @@ def api_baseball():
         sig_by_game  = {}
         for s in edge_signals:
             key = (s.game_id, s.side)
-            contracts = max(1, int(bankroll * s.kelly_frac / max(s.kalshi_prob, 0.01)))
+            # Base Kelly contracts
+            base_contracts = max(1, int(bankroll * s.kelly_frac / max(s.kalshi_prob, 0.01)))
+            # Scale by edge magnitude: 4c=1x, 8c=2x, 16c+=3x (capped at 5x)
+            edge_cents  = s.edge * 100
+            edge_scale  = max(1, min(5, int(edge_cents / 4)))
+            contracts   = base_contracts * edge_scale
+            # Payout multiplier: how many dollars back per dollar risked if win
+            roi_mult    = round(1.0 / max(s.kalshi_prob, 0.01), 2)
             sig_by_game[key] = {
                 "team":        s.team,
                 "side":        s.side,
@@ -373,6 +380,7 @@ def api_baseball():
                 "kelly_frac":  round(s.kelly_frac * 100, 1),
                 "contracts":   contracts,
                 "risk":        round(contracts * s.kalshi_prob, 2),
+                "roi_mult":    roi_mult,
                 "status":      s.status,
                 "mins_to_game": s.minutes_to_game,
             }
