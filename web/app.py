@@ -553,6 +553,8 @@ def api_baseball():
                 "team":      game_info["home"] if game_info and game_info.get("home_ticker") == ticker
                              else game_info["away"] if game_info else ticker,
                 "side":      "home" if game_info and game_info.get("home_ticker") == ticker else "away",
+                "commence":  game_info.get("commence") if game_info else None,
+                "mins_to_game": game_info.get("mins_to_game") if game_info else None,
             })
 
         # Last bot scan timestamp — seed from web server if bot hasn't run yet

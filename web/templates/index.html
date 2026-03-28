@@ -966,12 +966,18 @@ async function loadBaseball(manual = false) {
               const posRow = _posHtml(homePos, 'HOME', g.home) + _posHtml(awayPos, 'AWAY', g.away);
 
               // ── Duplicate bet check ─────────────────────────────────────────
-              // Priority: game_id (exact) → ticker match → same-day team names
+              // Check BOTH bet log AND live Kalshi positions
               const loggedBets = (betsData && betsData.bets) ? betsData.bets : [];
               const gameTickers = [homeTicker, awayTicker].filter(Boolean);
               const todayStr = new Date().toLocaleDateString('en-CA', {timeZone: TZ});
-              // Only match pending bets (not canceled/resolved ones)
-              const existingBet = loggedBets.find(b => {
+
+              // Check live Kalshi positions first (source of truth)
+              const livePos = (data.positions || []).find(pos =>
+                gameTickers.includes(pos.ticker)
+              );
+
+              // Then check bet log
+              const loggedBet = loggedBets.find(b => {
                 if (b.status === 'canceled' || b.result === 'canceled') return false;
                 if (g.id && b.game_id && b.game_id === g.id) return true;
                 if (b.ticker && gameTickers.includes(b.ticker)) return true;
@@ -979,6 +985,11 @@ async function loadBaseball(manual = false) {
                 const gDate = new Date(g.commence).toLocaleDateString('en-CA', {timeZone: TZ});
                 return bDate === gDate && b.home === g.home && b.away === g.away;
               });
+
+              // Either a live position OR a logged bet means bet already placed
+              const existingBet = livePos
+                ? { team: livePos.team, contracts: livePos.quantity, price_cents: livePos.avg_price }
+                : loggedBet;
 
               const autoBetRow = isLive
                 ? `<div style="margin-top:3px;padding:2px 5px;background:rgba(255,60,60,0.06);
@@ -1439,9 +1450,9 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores) {
         OPEN POSITIONS &nbsp;<span class="bb-status bb-status-pending" style="vertical-align:middle">${livePositions.length}</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">
-        ${livePositions.map(p => {
+        ${livePositions.map((p, pi) => {
             const sc = _scoreKey(mlbScores, p.away, p.home);
-            const isLive = sc && (sc.inProgress || sc.done);
+            const gameStarted = sc && (sc.inProgress || sc.done);
             const scoreStr = sc && sc.awayScore !== null
               ? `${sc.awayScore} – ${sc.homeScore}` : '';
             const situStr = sc && sc.done ? 'Final'
@@ -1450,24 +1461,45 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores) {
             const winner = sc && sc.done && sc.awayScore !== null
               ? (sc.awayScore > sc.homeScore ? sc.awayName : sc.homeName) : null;
             const betWon = winner && p.team && (winner.includes(p.team.split(' ').pop()) || p.team.includes(winner.split(' ').pop()));
-            const borderColor = sc && sc.done
-              ? (betWon ? 'rgba(0,255,136,0.4)' : 'rgba(255,68,102,0.4)')
-              : 'rgba(255,215,0,0.15)';
+
+            // Status badge + border color
+            let badge, borderColor;
+            if (sc && sc.done) {
+              badge = `<span style="font-size:8px;font-weight:700;color:${betWon ? 'var(--green)' : 'var(--red)'}">${betWon ? '✓ WON' : '✗ LOST'}</span>`;
+              borderColor = betWon ? 'rgba(0,255,136,0.4)' : 'rgba(255,68,102,0.4)';
+            } else if (gameStarted) {
+              badge = `<span style="font-size:8px;font-weight:700;color:var(--red)">● LIVE</span>`;
+              borderColor = 'rgba(255,60,60,0.25)';
+            } else {
+              // Game hasn't started — show countdown
+              const minsLeft = p.mins_to_game;
+              let waitLabel = 'WAITING';
+              if (minsLeft && minsLeft > 0) {
+                const h = Math.floor(minsLeft / 60);
+                const m = minsLeft % 60;
+                waitLabel = h > 0 ? `${h}h ${m}m` : `${m}m`;
+              }
+              badge = `<span style="font-size:8px;font-weight:600;color:var(--cyan)" id="pos-cd-${pi}">⏱ ${waitLabel}</span>`;
+              borderColor = 'rgba(0,212,255,0.15)';
+            }
+
+            // Score line (only when game has started)
+            const scoreLine = gameStarted
+              ? `<span style="font-size:10px;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums">
+                  <span class="live-score">${scoreStr}</span>
+                  <span class="live-situ dim" style="font-size:8px;margin-left:4px">${situStr}</span>
+                </span>` : '';
+
             return `
             <div data-live-game="1" data-away="${p.away}" data-home="${p.home}"
                  style="padding:5px 7px;background:var(--bg2);border:1px solid ${borderColor};border-radius:4px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
                 <span style="font-size:11px;font-weight:700;color:var(--text-bright)">${p.team}</span>
-                ${sc && sc.done
-                  ? `<span style="font-size:8px;font-weight:700;color:${betWon ? 'var(--green)' : 'var(--red)'}">${betWon ? '✓ WON' : '✗ LOST'}</span>`
-                  : `<span class="bb-status bb-status-pending" style="font-size:8px">live</span>`}
+                ${badge}
               </div>
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
                 <span class="dim" style="font-size:9px">${p.away} @ ${p.home}</span>
-                ${isLive ? `<span style="font-size:10px;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums">
-                  <span class="live-score">${scoreStr}</span>
-                  <span class="live-situ dim" style="font-size:8px;margin-left:4px">${situStr}</span>
-                </span>` : ''}
+                ${scoreLine}
               </div>
               <div style="display:flex;gap:8px;font-size:9px">
                 <span>${p.quantity}x @ ${p.avg_price}¢</span>
