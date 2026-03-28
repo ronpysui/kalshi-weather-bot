@@ -1994,6 +1994,32 @@ async function loadBaseball(manual = false) {
                                 : hasEdge ? `<span style="font-size:10px;font-weight:700;color:var(--green)">● BET</span>`
                                 :           `<span style="font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:.05em">NO EDGE</span>`;
 
+              // Bot window: 9AM–12PM CST
+              const cstHour = parseInt(new Date().toLocaleString('en-US', {timeZone: 'America/Chicago', hour: 'numeric', hour12: false}), 10);
+              const botOpen = cstHour >= 9 && cstHour < 12;
+
+              // Position row (home or away)
+              const homeTicker = g.home_ticker || '';
+              const awayTicker = g.away_ticker || '';
+              const homePos = g.home_position;
+              const awayPos = g.away_position;
+              const posToShow = homePos || awayPos;
+              const posTicker = homePos ? homeTicker : awayTicker;
+              const posSide   = homePos ? 'HOME' : 'AWAY';
+              const posRow = posToShow
+                ? (() => {
+                    const qty  = posToShow.quantity;
+                    const avg  = posToShow.avg_price;
+                    // avg_price may be raw cents integer or a fractional value
+                    const avgC = avg > 1 ? Math.round(avg) : Math.round(avg * 100);
+                    return `<div style="margin-top:8px;padding:6px 10px;background:rgba(157,78,221,0.08);
+                                        border-radius:4px;border:1px solid rgba(157,78,221,0.2);
+                                        font-size:10px;color:rgba(157,78,221,0.9)">
+                      📌 POSITION: ${qty} YES @ ${avgC}¢ &nbsp;<span style="font-size:9px;color:rgba(255,255,255,0.3)">${posSide} · ${posTicker}</span>
+                    </div>`;
+                  })()
+                : '';
+
               const autoBetRow = isLive
                 ? `<div style="margin-top:10px;padding:6px 8px;background:rgba(255,60,60,0.06);
                               border-radius:4px;border:1px solid rgba(255,60,60,0.15);
@@ -2005,6 +2031,16 @@ async function loadBaseball(manual = false) {
                     const roi   = bestSig.roi_mult || (100 / bestSig.kalshi_prob).toFixed(2);
                     const roiN  = parseFloat(roi).toFixed(2);
                     const roiC  = roiN >= 3 ? 'var(--green)' : roiN >= 2 ? 'var(--cyan)' : 'var(--text)';
+                    const betSide = bestSig.side;  // "home" or "away"
+                    const betTicker = betSide === 'home' ? homeTicker : awayTicker;
+                    const btnId = `bet-btn-${g.id}-${betSide}`;
+                    const botNote = botOpen
+                      ? `<div style="font-size:9px;color:rgba(255,255,255,0.2);margin-top:4px;line-height:1.4">
+                           Worker places this automatically on Railway — no action needed.
+                         </div>`
+                      : `<div style="font-size:9px;color:rgba(255,215,0,0.5);margin-top:4px;line-height:1.4">
+                           Bot window closed · manual bet available
+                         </div>`;
                     return `<div style="margin-top:10px;padding:8px 10px;background:rgba(0,255,136,0.07);
                                 border-radius:4px;border:1px solid rgba(0,255,136,0.15)">
                       <div style="display:flex;justify-content:space-between;align-items:center">
@@ -2016,9 +2052,16 @@ async function loadBaseball(manual = false) {
                       <div style="font-size:9px;color:rgba(0,255,136,0.6);margin-top:3px">
                         risk $${bestSig.risk} &nbsp;·&nbsp; payout $${(bestSig.risk * roiN).toFixed(2)} if win
                       </div>
-                      <div style="font-size:9px;color:rgba(255,255,255,0.2);margin-top:4px;line-height:1.4">
-                        Worker places this automatically on Railway — no action needed.
-                      </div>
+                      ${botNote}
+                      <button id="${btnId}"
+                        onclick="placeBaseballBet('${g.id}','${betSide}',${bestSig.contracts},${bestSig.kalshi_prob},'${bestSig.team}')"
+                        style="margin-top:8px;width:100%;padding:6px 0;font-family:var(--mono);
+                               font-size:11px;font-weight:700;letter-spacing:.06em;cursor:pointer;
+                               background:rgba(0,255,136,0.12);color:var(--green);
+                               border:1px solid rgba(0,255,136,0.35);border-radius:4px;
+                               transition:background .15s,border-color .15s">
+                        PLACE BET
+                      </button>
                     </div>`;
                   })()
                 : `<div style="margin-top:10px;padding:6px 8px;background:rgba(255,255,255,0.03);
@@ -2075,6 +2118,7 @@ async function loadBaseball(manual = false) {
                       <div class="${awayEdgeClass}" style="font-size:13px;font-weight:700">${awayEdgeVal >= 0 ? '+' : ''}${awayEdgeVal}c</div>
                     </div>
                   </div>
+                  ${posRow}
                   ${autoBetRow}
                 </div>`;
       };  // end renderGameCard
@@ -2295,6 +2339,52 @@ async function loadBaseball(manual = false) {
     document.getElementById('baseball-content').innerHTML =
       `<div class="empty-state" style="color:var(--red)">Error: ${e.message}</div>`;
     _bbStartCountdown();  // retry after countdown even on error
+  }
+}
+
+async function placeBaseballBet(gameId, side, contracts, price, teamName) {
+  const btnId = `bet-btn-${gameId}-${side}`;
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.textContent = 'placing...'; btn.disabled = true; }
+
+  try {
+    const res = await fetch('/api/baseball/bet', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        game_id:      gameId,
+        side:         side,
+        contracts:    contracts,
+        price:        price,
+        team_bet_on:  teamName,
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (btn) {
+        btn.textContent = '✓ BET PLACED';
+        btn.style.background = 'rgba(0,255,136,0.15)';
+        btn.style.color      = 'var(--green)';
+        btn.style.border     = '1px solid rgba(0,255,136,0.4)';
+        btn.disabled = false;
+      }
+      setTimeout(() => loadBaseball(), 1000);
+    } else {
+      const msg = data.error || 'Unknown error';
+      if (btn) {
+        btn.textContent = `Error: ${msg}`;
+        btn.style.color = 'var(--red)';
+        btn.style.background = 'rgba(255,68,102,0.1)';
+        btn.disabled = false;
+      }
+    }
+  } catch(e) {
+    if (btn) {
+      btn.textContent = `Error: ${e.message}`;
+      btn.style.color = 'var(--red)';
+      btn.style.background = 'rgba(255,68,102,0.1)';
+      btn.disabled = false;
+    }
   }
 }
 

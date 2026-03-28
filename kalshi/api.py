@@ -210,6 +210,55 @@ def place_order(ticker: str, side: str, count: int,
     return _post("/portfolio/orders", body)
 
 
+# ── Open positions ────────────────────────────────────────────────────────────
+
+def get_open_positions() -> dict:
+    """
+    Return open Kalshi positions keyed by ticker.
+    Each value: {"quantity": int, "avg_price": float (cents)}
+    Returns empty dict on error or if unauthenticated.
+    """
+    try:
+        data = _get("/portfolio/positions", params={"settlement_status": "unsettled", "limit": 1000}, auth=True)
+        positions = data.get("market_positions", data.get("positions", []))
+        result = {}
+        for p in positions:
+            ticker = p.get("ticker", "")
+            qty    = p.get("position", p.get("quantity", 0))
+            # avg_price may be in cents already
+            avg    = p.get("market_exposure", p.get("avg_price_cents", p.get("avg_price", 0)))
+            if ticker and qty and qty != 0:
+                result[ticker] = {
+                    "quantity":  qty,
+                    "avg_price": avg,
+                }
+        return result
+    except Exception:
+        return {}
+
+
+def place_baseball_order(ticker: str, side: str, contracts: int,
+                         price_cents: int) -> dict:
+    """
+    Place a baseball YES limit order on Kalshi.
+    side: "yes" (always YES for home/away win markets)
+    Returns the API response dict or raises on error.
+    """
+    if config.DRY_RUN:
+        print(f"[DRY RUN] Baseball order: BUY {contracts}x YES on {ticker} @ {price_cents}¢")
+        return {"status": "dry_run", "order": {"order_id": "dry-run"}}
+
+    body = {
+        "ticker":     ticker,
+        "action":     "buy",
+        "side":       "yes",
+        "type":       "limit",
+        "count":      contracts,
+        "yes_price":  price_cents,
+    }
+    return _post("/portfolio/orders", body)
+
+
 # ── Historical (backtest) ─────────────────────────────────────────────────────
 
 def get_settled_markets(series_ticker: str, limit: int = 500) -> list[dict]:

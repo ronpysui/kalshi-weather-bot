@@ -12,9 +12,12 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-STARTING_BANKROLL = 100.0  # $100 paper bankroll
-_LOG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                         "data", "baseball_bets.json")
+_STARTING_BANKROLL_DEFAULT = 100.0  # fallback if Kalshi balance unavailable
+_LOG_PATH  = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "data", "baseball_bets.json")
+_META_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "data", "baseball_meta.json")
+REDIS_META_KEY = "kalshi:baseball_meta"
 
 
 # ── Redis helpers (same pattern as daily_lock) ────────────────────────────────
@@ -163,6 +166,53 @@ def _resolve_via_mlb_stats(bet: dict) -> bool:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def _load_meta() -> dict:
+    r = _redis()
+    if r:
+        try:
+            raw = r.get(REDIS_META_KEY)
+            if raw:
+                return json.loads(raw)
+        except Exception:
+            pass
+    if os.path.exists(_META_PATH):
+        try:
+            with open(_META_PATH) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _save_meta(meta: dict) -> None:
+    r = _redis()
+    if r:
+        try:
+            r.set(REDIS_META_KEY, json.dumps(meta))
+        except Exception:
+            pass
+    os.makedirs(os.path.dirname(_META_PATH), exist_ok=True)
+    with open(_META_PATH, "w") as f:
+        json.dump(meta, f, indent=2)
+
+
+def _get_starting_bankroll(bets: list) -> float:
+    """
+    Return the starting bankroll to use for a fresh bet log.
+    On the very first bet, fetch the live Kalshi balance so the curve starts
+    at the real account value. Falls back to config.BANKROLL then the default.
+    """
+    try:
+        import config as _config
+        from kalshi.api import get_account_balance
+        balance = get_account_balance()
+        if balance is not None:
+            return balance
+        return _config.BANKROLL
+    except Exception:
+        return _STARTING_BANKROLL_DEFAULT
+
+
 def log_bet(home: str, away: str, team: str, side: str, ticker: str,
             contracts: int, price_cents: int, vegas_prob: float, edge: float,
             game_id: str = None, game_date: str = None) -> dict:
@@ -193,6 +243,12 @@ def log_bet(home: str, away: str, team: str, side: str, ticker: str,
         "pnl":         None,
         "resolved_at": None,
     }
+    # On the very first bet, record the real starting bankroll
+    meta = _load_meta()
+    if not bets and "starting_bankroll" not in meta:
+        meta["starting_bankroll"] = _get_starting_bankroll(bets)
+        _save_meta(meta)
+
     bets.append(bet)
     _save(bets)
     return bet
@@ -262,7 +318,11 @@ def pnl_summary(bets: list[dict] = None) -> dict:
     # Sort by timestamp
     sorted_bets = sorted(bets, key=lambda b: b["timestamp"])
 
-    bankroll = STARTING_BANKROLL
+    # Use real starting bankroll from meta if available, else default
+    meta = _load_meta()
+    starting_bankroll = meta.get("starting_bankroll", _STARTING_BANKROLL_DEFAULT)
+
+    bankroll = starting_bankroll
     wins = losses = pending = 0
     total_wagered = 0.0
     curve = [{"label": "start", "bankroll": round(bankroll, 2), "timestamp": None}]
@@ -298,9 +358,9 @@ def pnl_summary(bets: list[dict] = None) -> dict:
     win_rate   = wins / total_bets if total_bets else 0.0
 
     return {
-        "starting_bankroll": STARTING_BANKROLL,
+        "starting_bankroll": starting_bankroll,
         "current_bankroll":  round(bankroll, 2),
-        "total_pnl":         round(bankroll - STARTING_BANKROLL, 2),
+        "total_pnl":         round(bankroll - starting_bankroll, 2),
         "wins":              wins,
         "losses":            losses,
         "pending":           pending,

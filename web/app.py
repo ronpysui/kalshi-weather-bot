@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, render_template
 
 import config
-from kalshi.api import get_todays_markets, get_account_balance
+from kalshi.api import get_todays_markets, get_account_balance, get_open_positions, place_baseball_order
 from weather.nws_forecast import (
     get_effective_forecast, get_current_temp, get_running_high, get_7day_forecast,
     get_forecast_high_for_city, get_7day_forecast_for_city,
@@ -355,6 +355,7 @@ def api_baseball():
         kalshi_events = get_mlb_events()
         matched       = match_to_odds(kalshi_events, odds_games)
         bankroll      = get_account_balance() or config.BANKROLL
+        positions     = get_open_positions()  # keyed by ticker
 
         # Build signal index keyed by game_id for quick lookup
         edge_signals = analyze_all(matched)  # only edge > threshold
@@ -400,6 +401,13 @@ def api_baseball():
             home_edge   = round(home_prob - round(kalshi.get("home_ask", kalshi.get("home_yes", 0)) * 100, 1), 1)
             away_edge   = round(away_prob - round(kalshi.get("away_ask", kalshi.get("away_yes", 0)) * 100, 1), 1)
 
+            home_ticker = kalshi.get("home_ticker", "")
+            away_ticker = kalshi.get("away_ticker", "")
+
+            # Attach open positions if any
+            home_pos = positions.get(home_ticker) if home_ticker else None
+            away_pos = positions.get(away_ticker) if away_ticker else None
+
             games_out.append({
                 "id":           g["id"],
                 "home":         g["home"],
@@ -413,9 +421,14 @@ def api_baseball():
                 "home_edge":    home_edge,
                 "away_edge":    away_edge,
                 "num_books":    g["num_books"],
+                "home_ticker":  home_ticker,
+                "away_ticker":  away_ticker,
                 # Best signal for this game (if any)
                 "home_signal":  sig_by_game.get((g["id"], "home")),
                 "away_signal":  sig_by_game.get((g["id"], "away")),
+                # Open Kalshi positions for this game (if any)
+                "home_position": home_pos,
+                "away_position": away_pos,
             })
 
         return jsonify({
@@ -446,6 +459,77 @@ def api_baseball_log_bet():
         game_date   = body.get("game_date", ""),
     )
     return jsonify({"status": "ok", "bet": bet})
+
+
+@app.route("/api/baseball/bet", methods=["POST"])
+def api_baseball_bet():
+    """Place a baseball bet manually via the dashboard PLACE BET button."""
+    from flask import request as req
+    from baseball.bet_log import log_bet
+    try:
+        body       = req.get_json()
+        game_id    = body.get("game_id", "")
+        side       = body.get("side", "")        # "home" or "away"
+        contracts  = int(body.get("contracts", 1))
+        price      = int(body.get("price", 50))  # cents
+        team_bet_on = body.get("team_bet_on", "")
+
+        # Resolve the ticker and game metadata from matched games
+        from baseball.odds_api import get_mlb_games
+        from baseball.kalshi_mlb import get_mlb_events, match_to_odds
+
+        odds_games    = get_mlb_games()
+        kalshi_events = get_mlb_events()
+        matched       = match_to_odds(kalshi_events, odds_games)
+
+        game = next((g for g in matched if g["id"] == game_id), None)
+        if not game:
+            return jsonify({"error": f"Game not found: {game_id}"}), 404
+
+        kalshi = game["kalshi"]
+        ticker_key = "home_ticker" if side == "home" else "away_ticker"
+        ticker = kalshi.get(ticker_key, "")
+        if not ticker:
+            return jsonify({"error": f"No Kalshi ticker found for {side} side of game {game_id}"}), 400
+
+        # Place the order on Kalshi
+        result = place_baseball_order(
+            ticker      = ticker,
+            side        = "yes",
+            contracts   = contracts,
+            price_cents = price,
+        )
+
+        order_id = (result.get("order") or {}).get("order_id") or result.get("status", "ok")
+
+        # Log the bet
+        from datetime import datetime, timezone
+        game_date = game["commence"].strftime("%Y-%m-%d")
+        vegas_prob = round(game["home_prob"] * 100 if side == "home" else game["away_prob"] * 100, 1)
+        home_kalshi_ask = kalshi.get("home_ask", kalshi.get("home_yes", price / 100))
+        away_kalshi_ask = kalshi.get("away_ask", kalshi.get("away_yes", price / 100))
+        kalshi_ask = home_kalshi_ask if side == "home" else away_kalshi_ask
+        edge = round(vegas_prob - kalshi_ask * 100, 1)
+
+        log_bet(
+            home        = game["home"],
+            away        = game["away"],
+            team        = team_bet_on or (game["home"] if side == "home" else game["away"]),
+            side        = side,
+            ticker      = ticker,
+            contracts   = contracts,
+            price_cents = price,
+            vegas_prob  = vegas_prob,
+            edge        = edge,
+            game_id     = game_id,
+            game_date   = game_date,
+        )
+
+        return jsonify({"success": True, "order_id": str(order_id)})
+
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
 
 @app.route("/api/baseball/bets")
