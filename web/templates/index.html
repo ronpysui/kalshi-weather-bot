@@ -2045,7 +2045,7 @@ async function loadBaseball(manual = false) {
                     const betTeam = bestSig.team || (betSide === 'home' ? g.home : g.away);
                     const btnId   = `bet-btn-${g.id}-${betSide}`;
 
-                    // Already bet this game?
+                    // Already bet this game? (from bet log)
                     if (existingBet) {
                       const eb = existingBet;
                       return `<div style="margin-top:10px;padding:8px 10px;
@@ -2060,6 +2060,29 @@ async function loadBaseball(manual = false) {
                         <div style="font-size:9px;color:rgba(255,255,255,0.25);margin-top:3px">
                           Bot already placed this bet — no action needed
                         </div>
+                      </div>`;
+                    }
+
+                    // Position exists on Kalshi but not yet in bet log → offer to log it
+                    const existingPos = betSide === 'home' ? homePos : awayPos;
+                    if (existingPos && existingPos.quantity > 0) {
+                      const posAvg = existingPos.avg_price > 1 ? Math.round(existingPos.avg_price) : Math.round(existingPos.avg_price * 100);
+                      const gDate  = new Date(g.commence).toLocaleDateString('en-CA', {timeZone: TZ});
+                      return `<div style="margin-top:10px;padding:8px 10px;
+                                  background:rgba(157,78,221,0.07);border-radius:4px;
+                                  border:1px solid rgba(157,78,221,0.3)">
+                        <div style="font-size:10px;color:rgba(180,120,255,0.9);font-weight:700;margin-bottom:4px">
+                          📌 POSITION EXISTS · ${betTeam} YES · ${existingPos.quantity}x @ ${posAvg}¢
+                        </div>
+                        <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:6px">
+                          Already on Kalshi — log it to track P&L
+                        </div>
+                        <button onclick="logExistingBet(this,'${g.id}','${betSide}',${existingPos.quantity},${posAvg},'${betTeam}','${g.home}','${g.away}','${gDate}',${bestSig.vegas_prob},${bestSig.edge},'${betSide === 'home' ? homeTicker : awayTicker}')"
+                          style="width:100%;padding:6px 0;font-family:var(--mono);font-size:11px;font-weight:700;
+                                 letter-spacing:.06em;cursor:pointer;background:rgba(157,78,221,0.12);
+                                 color:rgba(180,120,255,0.9);border:1px solid rgba(157,78,221,0.4);border-radius:4px;">
+                          LOG EXISTING BET
+                        </button>
                       </div>`;
                     }
 
@@ -2328,8 +2351,8 @@ async function loadBaseball(manual = false) {
           </div>`;
       }
 
-      html += renderSection(todayGames,    'TODAY',    new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
-      html += renderSection(tomorrowGames, 'TOMORROW', new Date(Date.now()+864e5).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
+      // Show all games (today + tomorrow) in one list sorted by first pitch — no TOMORROW section
+      html += renderSection([...todayGames, ...tomorrowGames], 'GAMES', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
 
       /* ── removed old flat games block ── */
       if (false) { // placeholder to keep block structure intact
@@ -2367,6 +2390,46 @@ async function loadBaseball(manual = false) {
     document.getElementById('baseball-content').innerHTML =
       `<div class="empty-state" style="color:var(--red)">Error: ${e.message}</div>`;
     _bbStartCountdown();  // retry after countdown even on error
+  }
+}
+
+async function logExistingBet(btn, gameId, side, contracts, priceCents, teamName, home, away, gameDate, vegasProb, edge, ticker) {
+  btn.disabled = true;
+  btn.textContent = 'logging...';
+  try {
+    const res = await fetch('/api/baseball/log_bet', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        game_id:     gameId,
+        home,
+        away,
+        team:        teamName,
+        side,
+        ticker,
+        contracts,
+        price_cents: priceCents,
+        vegas_prob:  vegasProb,
+        edge,
+        game_date:   gameDate,
+      }),
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      btn.textContent = '✓ LOGGED';
+      btn.style.background = 'rgba(0,255,136,0.12)';
+      btn.style.color = 'var(--green)';
+      btn.style.border = '1px solid rgba(0,255,136,0.4)';
+      setTimeout(() => loadBaseball(), 800);
+    } else {
+      btn.textContent = 'Error';
+      btn.style.color = 'var(--red)';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    btn.textContent = `Error: ${e.message}`;
+    btn.style.color = 'var(--red)';
+    btn.disabled = false;
   }
 }
 
@@ -2564,12 +2627,9 @@ function renderPnlChart(betsData, liveBalance) {
 
   const s = betsData.summary || {};
 
-  // Use the same corrected starting balance as the summary widget:
-  // prefer stored value unless it's the placeholder $100, then use live balance.
+  // Starting balance: live Kalshi balance always wins; fall back to stored value
   const storedStart = s.starting_bankroll;
-  const trueStart = (storedStart && storedStart !== 100)
-                      ? storedStart
-                      : (liveBalance || storedStart || 100);
+  const trueStart = liveBalance || storedStart || 100;
 
   // Clone curve and override the first "start" point with the corrected value
   const rawCurve = (s.curve || []).map(p => ({...p}));
