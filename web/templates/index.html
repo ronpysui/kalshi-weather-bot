@@ -1797,29 +1797,44 @@ async function loadBaseball(manual = false) {
             ${data.games.map(g => {
               const homeEdgeVal = g.home_edge || 0;
               const awayEdgeVal = g.away_edge || 0;
-              const bestEdge = Math.max(homeEdgeVal, awayEdgeVal);
-              const hasEdge = bestEdge >= MIN_EDGE_DISPLAY;
-              const hs = g.home_signal;
-              const as_ = g.away_signal;
+              const bestEdge    = Math.max(homeEdgeVal, awayEdgeVal);
+              const isLive      = g.mins_to_game <= 0;
+              // Only flag BET for upcoming games — can't bet once game starts
+              const hasEdge     = bestEdge >= MIN_EDGE_DISPLAY && !isLive;
+              const hs   = g.home_signal;
+              const as_  = g.away_signal;
               const bestSig = hs && as_ ? (hs.edge >= as_.edge ? hs : as_) : (hs || as_);
-              const pitchTime = new Date(g.commence).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',timeZone:'America/New_York'});
-              const minsLabel = g.mins_to_game > 60 ? `${pitchTime} ET`
-                              : g.mins_to_game > 5  ? `🟡 ${g.mins_to_game}m to pitch`
-                              : g.mins_to_game > 0  ? `🟢 ${g.mins_to_game}m`
-                              : '🔴 LIVE';
 
-              const cardOpacity  = hasEdge ? '1' : '0.55';
-              const borderStyle  = hasEdge
-                ? 'border-color:rgba(0,255,136,0.5);box-shadow:0 0 12px rgba(0,255,136,0.08)'
-                : 'border-color:rgba(255,255,255,0.06)';
+              // Date + time label
+              const commenceDate = new Date(g.commence);
+              const etNow        = new Date().toLocaleDateString('en-US', {timeZone:'America/New_York'});
+              const etGame       = commenceDate.toLocaleDateString('en-US', {timeZone:'America/New_York'});
+              const isTomorrow   = new Date(etGame) > new Date(etNow);
+              const pitchTime    = commenceDate.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',timeZone:'America/New_York'});
+              const dateLabel    = etGame === etNow ? `Today` : commenceDate.toLocaleDateString('en-US', {month:'short',day:'numeric',timeZone:'America/New_York'});
+              const minsLabel    = isLive              ? '🔴 LIVE'
+                                 : g.mins_to_game < 5 ? `🟢 ${g.mins_to_game}m · ${pitchTime} ET`
+                                 : g.mins_to_game < 60? `🟡 ${g.mins_to_game}m · ${pitchTime} ET`
+                                 :                      `${dateLabel} · ${pitchTime} ET`;
+
+              const cardOpacity  = (hasEdge || isLive) ? '1' : '0.5';
+              const borderStyle  = hasEdge ? 'border-color:rgba(0,255,136,0.5);box-shadow:0 0 12px rgba(0,255,136,0.08)'
+                                 : isLive  ? 'border-color:rgba(255,60,60,0.3)'
+                                 :           'border-color:rgba(255,255,255,0.06)';
               const homeEdgeClass = homeEdgeVal >= MIN_EDGE_DISPLAY ? 'green' : homeEdgeVal <= -MIN_EDGE_DISPLAY ? 'red' : 'dim';
               const awayEdgeClass = awayEdgeVal >= MIN_EDGE_DISPLAY ? 'green' : awayEdgeVal <= -MIN_EDGE_DISPLAY ? 'red' : 'dim';
 
-              const statusBadge = hasEdge
-                ? `<span style="font-size:10px;font-weight:700;color:var(--green)">● BET</span>`
-                : `<span style="font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:.05em">NO EDGE</span>`;
+              const statusBadge = isLive  ? `<span style="font-size:10px;font-weight:700;color:var(--red)">● LIVE</span>`
+                                : hasEdge ? `<span style="font-size:10px;font-weight:700;color:var(--green)">● BET</span>`
+                                :           `<span style="font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:.05em">NO EDGE</span>`;
 
-              const autoBetRow = bestSig
+              const autoBetRow = isLive
+                ? `<div style="margin-top:10px;padding:6px 8px;background:rgba(255,60,60,0.06);
+                              border-radius:4px;border:1px solid rgba(255,60,60,0.15);
+                              font-size:10px;color:rgba(255,100,100,0.7)">
+                    ● in progress · betting window closed
+                   </div>`
+                : hasEdge && bestSig
                 ? `<div style="margin-top:10px;padding:6px 8px;background:rgba(0,255,136,0.07);
                               border-radius:4px;border:1px solid rgba(0,255,136,0.15);
                               font-size:10px;color:var(--green)">
@@ -1879,12 +1894,50 @@ async function loadBaseball(manual = false) {
             }).join('')}
           </div>
         </div>`;
+
+      // ── In-progress / past games this session ───────────────────────────────
+      const liveGames = data.games.filter(g => g.mins_to_game <= 0);
+      if (liveGames.length) {
+        html += `
+          <div style="margin-top:8px;margin-bottom:24px">
+            <div class="panel-label" style="margin-bottom:10px">
+              IN PROGRESS / RECENT &nbsp;<span class="dim" style="font-size:10px">games started today</span>
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead>
+                <tr style="color:var(--text-dim);text-align:left;border-bottom:1px solid var(--border)">
+                  <th style="padding:6px 8px;font-weight:400">MATCHUP</th>
+                  <th style="padding:6px 8px;font-weight:400;text-align:right">VEGAS HOME</th>
+                  <th style="padding:6px 8px;font-weight:400;text-align:right">KALSHI HOME</th>
+                  <th style="padding:6px 8px;font-weight:400;text-align:right">VEGAS AWAY</th>
+                  <th style="padding:6px 8px;font-weight:400;text-align:right">KALSHI AWAY</th>
+                  <th style="padding:6px 8px;font-weight:400;text-align:center">STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${liveGames.map(g => `
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+                    <td style="padding:7px 8px;color:var(--text-bright);font-weight:500">
+                      ${g.away} @ ${g.home}
+                    </td>
+                    <td style="padding:7px 8px;text-align:right;color:var(--cyan)">${g.home_prob}%</td>
+                    <td style="padding:7px 8px;text-align:right;color:var(--text)">${g.home_kalshi}%</td>
+                    <td style="padding:7px 8px;text-align:right;color:var(--cyan)">${g.away_prob}%</td>
+                    <td style="padding:7px 8px;text-align:right;color:var(--text)">${g.away_kalshi}%</td>
+                    <td style="padding:7px 8px;text-align:center">
+                      <span style="color:var(--red);font-weight:600;font-size:10px">● LIVE</span>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+      }
     }
 
     el.innerHTML = html;
     renderPnlChart(betsData);
     // Start next-game countdown AFTER DOM is updated so element exists
-    if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].mins_to_game);
+    if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].commence);
     _bbStartCountdown();
   } catch(e) {
     document.getElementById('baseball-content').innerHTML =
