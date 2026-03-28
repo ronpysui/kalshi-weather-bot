@@ -320,6 +320,25 @@ def api_place_order():
     return jsonify({"status": result.get("status", "ok")})
 
 
+@app.route("/api/auth/status")
+def api_auth_status():
+    """Quick auth diagnostic — tells you exactly what's missing."""
+    import os, config
+    from kalshi.api import _load_private_key, get_account_balance
+    key = _load_private_key()
+    balance = get_account_balance()
+    return jsonify({
+        "has_key_id":          bool(config.KALSHI_API_KEY_ID),
+        "key_id_preview":      (config.KALSHI_API_KEY_ID or "")[:8] + "...",
+        "has_private_key_env": bool(os.getenv("KALSHI_PRIVATE_KEY_CONTENTS")),
+        "has_private_key_file":bool(config.KALSHI_PRIVATE_KEY_PATH and
+                                    os.path.exists(config.KALSHI_PRIVATE_KEY_PATH or "")),
+        "key_loaded":          key is not None,
+        "balance":             balance,
+        "auth_works":          balance is not None,
+    })
+
+
 @app.route("/api/baseball/debug")
 def api_baseball_debug():
     try:

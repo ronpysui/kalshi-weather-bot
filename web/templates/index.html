@@ -2016,12 +2016,19 @@ async function loadBaseball(manual = false) {
               };
               const posRow = _posHtml(homePos, 'HOME', g.home) + _posHtml(awayPos, 'AWAY', g.away);
 
-              // ── Duplicate bet check — game_id only (team names too broad:
-              //    same teams can play back-to-back days causing false positives)
+              // ── Duplicate bet check ─────────────────────────────────────────
+              // Priority: game_id (exact) → ticker match → same-day team names
               const loggedBets = (betsData && betsData.bets) ? betsData.bets : [];
-              const existingBet = g.id
-                ? loggedBets.find(b => b.game_id && b.game_id === g.id)
-                : null;
+              const gameTickers = [homeTicker, awayTicker].filter(Boolean);
+              const todayStr = new Date().toLocaleDateString('en-CA', {timeZone: TZ});
+              const existingBet = loggedBets.find(b => {
+                if (g.id && b.game_id && b.game_id === g.id) return true;
+                if (b.ticker && gameTickers.includes(b.ticker)) return true;
+                // Same-day team name fallback (for old bets without game_id/ticker)
+                const bDate = (b.game_date || b.date_placed || '').slice(0, 10);
+                const gDate = new Date(g.commence).toLocaleDateString('en-CA', {timeZone: TZ});
+                return bDate === gDate && b.home === g.home && b.away === g.away;
+              });
 
               const autoBetRow = isLive
                 ? `<div style="margin-top:10px;padding:6px 8px;background:rgba(255,60,60,0.06);
