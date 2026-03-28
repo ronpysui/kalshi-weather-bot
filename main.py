@@ -126,12 +126,16 @@ def run_once(bankroll: float) -> float:
                 continue
 
             price_cents = round(sig.mkt_price * 100)
-            place_order(
-                ticker=sig.ticker,
-                side=sig.side,
-                count=contracts,
-                price_cents=price_cents,
-            )
+            try:
+                place_order(
+                    ticker=sig.ticker,
+                    side=sig.side,
+                    count=contracts,
+                    price_cents=price_cents,
+                )
+            except Exception as e:
+                console.print(f"[red]Order failed for {sig.ticker}: {e}[/]")
+                continue
             _log_trade(
                 ticker=sig.ticker,
                 side=sig.side,
@@ -334,8 +338,15 @@ def main():
 
     try:
         while True:
-            bankroll = run_once(bankroll)
-            run_baseball_once(bankroll)
+            try:
+                bankroll = run_once(bankroll)
+            except Exception as e:
+                console.print(f"[red]Temp bot error: {e}[/]")
+
+            try:
+                run_baseball_once(bankroll)
+            except Exception as e:
+                console.print(f"[red]Baseball bot error: {e}[/]")
 
             # ── Adaptive sleep ────────────────────────────────────────────────
             # Default: poll every POLL_INTERVAL_SECONDS (30 min).
