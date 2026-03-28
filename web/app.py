@@ -320,6 +320,19 @@ def api_place_order():
     return jsonify({"status": result.get("status", "ok")})
 
 
+@app.route("/api/baseball/reset-starting-balance", methods=["POST"])
+def api_reset_starting_balance():
+    """Reset the stored starting_bankroll to the real Kalshi balance."""
+    from baseball.bet_log import _load_meta, _save_meta
+    balance = get_account_balance()
+    if balance is None:
+        return jsonify({"error": "Kalshi auth failed"}), 400
+    meta = _load_meta()
+    meta["starting_bankroll"] = balance
+    _save_meta(meta)
+    return jsonify({"ok": True, "starting_bankroll": balance})
+
+
 @app.route("/api/auth/status")
 def api_auth_status():
     """Quick auth diagnostic — tells you exactly what's missing."""
