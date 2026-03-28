@@ -1786,36 +1786,26 @@ async function loadBaseball(manual = false) {
                 id="bb-next-game-cd">--</span>
         </div>` : '';
 
-      html += `
-        <div style="margin-bottom:24px">
-          ${nextBannerHtml}
-          <div class="panel-label" style="margin-bottom:12px">
-            SIGNALS &nbsp;<span class="dim" style="font-size:10px">edge > 4¢ highlighted · sorted by first pitch</span>
-            ${sigCount ? `<span style="margin-left:8px;font-size:10px;color:var(--green)">${sigCount} edge found</span>` : ''}
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:12px">
-            ${data.games.map(g => {
+      // ── Helper: render a single game card ────────────────────────────────────
+      const TZ = 'America/Chicago';
+      const cstNow  = new Date().toLocaleDateString('en-US', {timeZone: TZ});
+
+      const renderGameCard = g => {
               const homeEdgeVal = g.home_edge || 0;
               const awayEdgeVal = g.away_edge || 0;
               const bestEdge    = Math.max(homeEdgeVal, awayEdgeVal);
               const isLive      = g.mins_to_game <= 0;
-              // Only flag BET for upcoming games — can't bet once game starts
               const hasEdge     = bestEdge >= MIN_EDGE_DISPLAY && !isLive;
               const hs   = g.home_signal;
               const as_  = g.away_signal;
               const bestSig = hs && as_ ? (hs.edge >= as_.edge ? hs : as_) : (hs || as_);
 
-              // Date + time label
               const commenceDate = new Date(g.commence);
-              const etNow        = new Date().toLocaleDateString('en-US', {timeZone:'America/New_York'});
-              const etGame       = commenceDate.toLocaleDateString('en-US', {timeZone:'America/New_York'});
-              const isTomorrow   = new Date(etGame) > new Date(etNow);
-              const pitchTime    = commenceDate.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',timeZone:'America/New_York'});
-              const dateLabel    = etGame === etNow ? `Today` : commenceDate.toLocaleDateString('en-US', {month:'short',day:'numeric',timeZone:'America/New_York'});
+              const pitchTime    = commenceDate.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',timeZone: TZ});
               const minsLabel    = isLive              ? '🔴 LIVE'
-                                 : g.mins_to_game < 5 ? `🟢 ${g.mins_to_game}m · ${pitchTime} ET`
-                                 : g.mins_to_game < 60? `🟡 ${g.mins_to_game}m · ${pitchTime} ET`
-                                 :                      `${dateLabel} · ${pitchTime} ET`;
+                                 : g.mins_to_game < 5 ? `🟢 ${g.mins_to_game}m · ${pitchTime} CST`
+                                 : g.mins_to_game < 60? `🟡 ${g.mins_to_game}m · ${pitchTime} CST`
+                                 :                      `${pitchTime} CST`;
 
               const cardOpacity  = (hasEdge || isLive) ? '1' : '0.5';
               const borderStyle  = hasEdge ? 'border-color:rgba(0,255,136,0.5);box-shadow:0 0 12px rgba(0,255,136,0.08)'
@@ -1855,7 +1845,6 @@ async function loadBaseball(manual = false) {
                   </div>
                   <div style="font-size:14px;font-weight:700;color:var(--text-bright);margin-bottom:1px">${g.away}</div>
                   <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px">@ ${g.home}</div>
-
                   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;margin-bottom:3px">
                     <div style="font-size:9px;color:var(--text-dim);text-align:center;letter-spacing:.08em">VEGAS</div>
                     <div style="font-size:9px;color:var(--text-dim);text-align:center;letter-spacing:.08em">KALSHI</div>
@@ -1891,35 +1880,81 @@ async function loadBaseball(manual = false) {
                   </div>
                   ${autoBetRow}
                 </div>`;
-            }).join('')}
-          </div>
-        </div>`;
+      };  // end renderGameCard
 
-      // ── In-progress / past games this session ───────────────────────────────
-      const liveGames = data.games.filter(g => g.mins_to_game <= 0);
-      if (liveGames.length) {
+      // ── Split games into TODAY / TOMORROW groups ──────────────────────────
+      const todayGames    = data.games.filter(g => {
+        const d = new Date(g.commence).toLocaleDateString('en-US', {timeZone: TZ});
+        return d === cstNow;
+      });
+      const tomorrowGames = data.games.filter(g => {
+        const d = new Date(g.commence).toLocaleDateString('en-US', {timeZone: TZ});
+        return d !== cstNow;
+      });
+
+      const renderSection = (games, label, subLabel) => {
+        if (!games.length) return '';
+        const upcomingInSection = games.filter(g => g.mins_to_game > 0);
+        const liveInSection     = games.filter(g => g.mins_to_game <= 0);
+        const edgeInSection     = games.filter(g =>
+          (g.home_edge >= MIN_EDGE_DISPLAY || g.away_edge >= MIN_EDGE_DISPLAY) && g.mins_to_game > 0
+        ).length;
+
+        let s = `
+          <div style="margin-bottom:28px">
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px;
+                        padding-bottom:6px;border-bottom:1px solid var(--border)">
+              <div class="panel-label" style="margin:0">${label}</div>
+              <span class="dim" style="font-size:10px">${subLabel}</span>
+              ${edgeInSection ? `<span style="font-size:10px;color:var(--green);margin-left:4px">${edgeInSection} bet signal${edgeInSection > 1 ? 's' : ''}</span>` : ''}
+            </div>`;
+
+        // Live/in-progress games for this day as a compact strip
+        if (liveInSection.length) {
+          s += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+            ${liveInSection.map(g => `
+              <div style="padding:6px 12px;background:rgba(255,60,60,0.06);border:1px solid rgba(255,60,60,0.2);
+                          border-radius:6px;font-size:11px">
+                <span style="color:var(--red);font-weight:700">● LIVE</span>
+                <span style="color:var(--text-bright);margin:0 6px">${g.away} @ ${g.home}</span>
+                <span class="dim">${new Date(g.commence).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:TZ})} CST</span>
+              </div>`).join('')}
+          </div>`;
+        }
+
+        // Upcoming game cards
+        if (upcomingInSection.length) {
+          s += `<div style="display:flex;flex-wrap:wrap;gap:12px">
+            ${upcomingInSection.map(renderGameCard).join('')}
+          </div>`;
+        }
+
+        s += `</div>`;
+        return s;
+      };
+
+      html += `<div style="margin-bottom:24px">
+        ${nextBannerHtml}
+        <div class="panel-label" style="margin-bottom:4px">
+          SIGNALS &nbsp;<span class="dim" style="font-size:10px">edge > 4¢ highlighted · sorted by first pitch</span>
+          ${sigCount ? `<span style="margin-left:8px;font-size:10px;color:var(--green)">${sigCount} bet signal${sigCount>1?'s':''} today</span>` : ''}
+        </div>
+      </div>`;
+
+      html += renderSection(todayGames,    'TODAY',    new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
+      html += renderSection(tomorrowGames, 'TOMORROW', new Date(Date.now()+864e5).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:TZ}));
+
+      /* ── removed old flat games block ── */
+      if (false) { // placeholder to keep block structure intact
+        const liveGames = [];
         html += `
-          <div style="margin-top:8px;margin-bottom:24px">
-            <div class="panel-label" style="margin-bottom:10px">
-              IN PROGRESS / RECENT &nbsp;<span class="dim" style="font-size:10px">games started today</span>
-            </div>
+          <div>
             <table style="width:100%;border-collapse:collapse;font-size:11px">
-              <thead>
-                <tr style="color:var(--text-dim);text-align:left;border-bottom:1px solid var(--border)">
-                  <th style="padding:6px 8px;font-weight:400">MATCHUP</th>
-                  <th style="padding:6px 8px;font-weight:400;text-align:right">VEGAS HOME</th>
-                  <th style="padding:6px 8px;font-weight:400;text-align:right">KALSHI HOME</th>
-                  <th style="padding:6px 8px;font-weight:400;text-align:right">VEGAS AWAY</th>
-                  <th style="padding:6px 8px;font-weight:400;text-align:right">KALSHI AWAY</th>
-                  <th style="padding:6px 8px;font-weight:400;text-align:center">STATUS</th>
-                </tr>
-              </thead>
+              <thead><tr><th></th></tr></thead>
               <tbody>
                 ${liveGames.map(g => `
-                  <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
-                    <td style="padding:7px 8px;color:var(--text-bright);font-weight:500">
-                      ${g.away} @ ${g.home}
-                    </td>
+                  <tr>
+                    <td>${g.away} @ ${g.home}</td>
                     <td style="padding:7px 8px;text-align:right;color:var(--cyan)">${g.home_prob}%</td>
                     <td style="padding:7px 8px;text-align:right;color:var(--text)">${g.home_kalshi}%</td>
                     <td style="padding:7px 8px;text-align:right;color:var(--cyan)">${g.away_prob}%</td>
