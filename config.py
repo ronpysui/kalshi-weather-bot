@@ -65,9 +65,14 @@ BACKTEST_SIMULATIONS    = 500   # Monte Carlo runs per day
 BACKTEST_FORECAST_SIGMA = 2.5   # simulated NWS forecast error (°F)
 
 # ── Scheduler ────────────────────────────────────────────────────────────────
-POLL_INTERVAL_SECONDS = 1800   # 30 minutes
+POLL_INTERVAL_SECONDS = 600    # 10 minutes (baseball edge scanning)
 MARKET_OPEN_HOUR_ET   = 6
 MARKET_CLOSE_HOUR_ET  = 20
+
+# ── Baseball scanning hours (save Odds API quota) ───────────────────────────
+# Only call Odds API between these hours ET (roughly when MLB games are near)
+BASEBALL_SCAN_START_ET = 10   # 10 AM ET
+BASEBALL_SCAN_END_ET   = 24   # midnight ET (0 = midnight next day)
 
 # ── Daily bet lock ────────────────────────────────────────────────────────────
 # Bets are placed ONCE per day at BET_HOUR_ET and then locked.

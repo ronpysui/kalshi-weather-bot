@@ -224,6 +224,13 @@ def run_baseball_once(bankroll: float) -> None:
     if not os.getenv("ODDS_API_KEY"):
         return  # silently skip if no API key configured
 
+    # Smart hours: skip Odds API calls outside game window (save quota)
+    hour_et = datetime.now(ET).hour
+    scan_start = getattr(config, 'BASEBALL_SCAN_START_ET', 10)
+    scan_end   = getattr(config, 'BASEBALL_SCAN_END_ET', 24)
+    if hour_et < scan_start or (scan_end < 24 and hour_et >= scan_end):
+        return  # outside baseball scanning window
+
     # Record scan timestamp (Redis or file) so dashboard can show countdown
     _record_scan_time()
 
