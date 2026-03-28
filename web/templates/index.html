@@ -1920,7 +1920,7 @@ async function loadBaseball(manual = false) {
           <div class="dim">Add your free API key from <b>the-odds-api.com</b> to Railway env vars as <b>ODDS_API_KEY</b></div>
         </div>`;
       el.innerHTML = html;
-      renderPnlChart(betsData);
+      renderPnlChart(betsData, data && data.bankroll);
       _bbStartCountdown();
       return;
     }
@@ -1928,7 +1928,7 @@ async function loadBaseball(manual = false) {
     if (data.error) {
       html += `<div class="empty-state" style="color:var(--red)">${data.error}</div>`;
       el.innerHTML = html;
-      renderPnlChart(betsData);
+      renderPnlChart(betsData, data && data.bankroll);
       _bbStartCountdown();
       return;
     }
@@ -2282,7 +2282,7 @@ async function loadBaseball(manual = false) {
     }
 
     el.innerHTML = html;
-    renderPnlChart(betsData);
+    renderPnlChart(betsData, data && data.bankroll);
     // Start next-game countdown AFTER DOM is updated so element exists
     if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].mins_to_game);
     // Start fast score refresh if any live games visible
@@ -2304,12 +2304,16 @@ function renderBaseballBets(betsData) {
   const pnlSign  = pnl >= 0 ? '+' : '';
   const winRate  = s.win_rate != null ? s.win_rate : '--';
 
+  // Use real Kalshi balance if available, else fall back to tracked bankroll
+  const displayBalance  = liveBalance || s.current_bankroll || 100;
+  const startingBalance = s.starting_bankroll || liveBalance || 100;
+
   let html = `
     <div class="bb-summary">
       <div class="bb-stat">
         <div class="bb-stat-label">Bankroll</div>
-        <div class="bb-stat-val" style="color:var(--green)">$${(s.current_bankroll || 100).toFixed(2)}</div>
-        <div class="bb-stat-sub">started $${(s.starting_bankroll || 100).toFixed(2)}</div>
+        <div class="bb-stat-val" style="color:var(--green)">$${displayBalance.toFixed(2)}</div>
+        <div class="bb-stat-sub">started $${startingBalance.toFixed(2)}</div>
       </div>
       <div class="bb-stat">
         <div class="bb-stat-label">Total P&amp;L</div>
@@ -2427,7 +2431,7 @@ function renderBaseballBets(betsData) {
   return html;
 }
 
-function renderPnlChart(betsData) {
+function renderPnlChart(betsData, liveBalance) {
   const canvas = document.getElementById('bb-pnl-chart');
   if (!canvas) return;
   const curve = (betsData.summary || {}).curve || [];
