@@ -2559,16 +2559,36 @@ function renderBaseballBets(betsData, liveBalance) {
 function renderPnlChart(betsData, liveBalance) {
   const canvas = document.getElementById('bb-pnl-chart');
   if (!canvas) return;
-  const curve = (betsData.summary || {}).curve || [];
 
   if (_bbPnlChart) { _bbPnlChart.destroy(); _bbPnlChart = null; }
 
-  const labels = curve.map(p => p.label);
-  const values = curve.map(p => p.bankroll);
-  const colors = curve.map((p, i) => {
+  const s = betsData.summary || {};
+
+  // Use the same corrected starting balance as the summary widget:
+  // prefer stored value unless it's the placeholder $100, then use live balance.
+  const storedStart = s.starting_bankroll;
+  const trueStart = (storedStart && storedStart !== 100)
+                      ? storedStart
+                      : (liveBalance || storedStart || 100);
+
+  // Clone curve and override the first "start" point with the corrected value
+  const rawCurve = (s.curve || []).map(p => ({...p}));
+  if (rawCurve.length > 0 && rawCurve[0].label === 'start') {
+    rawCurve[0].bankroll = trueStart;
+  }
+
+  const labels = rawCurve.map(p => p.label);
+  const values = rawCurve.map(p => p.bankroll);
+  const colors = rawCurve.map((p, i) => {
     if (i === 0) return 'rgba(0,212,255,0.8)';
     return p.won ? 'rgba(0,255,136,1)' : 'rgba(255,68,102,1)';
   });
+
+  // Y-axis range: give 10% padding around the actual data range
+  const allVals = values.length ? values : [trueStart];
+  const minVal  = Math.min(...allVals);
+  const maxVal  = Math.max(...allVals);
+  const pad     = Math.max((maxVal - minVal) * 0.15, trueStart * 0.08, 0.5);
 
   _bbPnlChart = new Chart(canvas, {
     type: 'line',
@@ -2579,7 +2599,7 @@ function renderPnlChart(betsData, liveBalance) {
         borderColor: '#00ff88',
         borderWidth: 2,
         pointBackgroundColor: colors,
-        pointRadius: curve.length <= 1 ? 4 : 5,
+        pointRadius: rawCurve.length <= 1 ? 4 : 5,
         pointHoverRadius: 7,
         tension: 0.3,
         fill: {
@@ -2610,10 +2630,12 @@ function renderPnlChart(betsData, liveBalance) {
           grid:  { color: 'rgba(30,45,61,0.5)' },
         },
         y: {
+          suggestedMin: minVal - pad,
+          suggestedMax: maxVal + pad,
           ticks: {
             color: '#6e7681',
             font: { family: 'JetBrains Mono', size: 10 },
-            callback: v => '$' + v.toFixed(0),
+            callback: v => '$' + v.toFixed(2),
           },
           grid: { color: 'rgba(30,45,61,0.5)' },
         }
