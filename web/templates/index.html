@@ -2397,9 +2397,13 @@ function renderBaseballBets(betsData, liveBalance) {
   const pnlSign  = pnl >= 0 ? '+' : '';
   const winRate  = s.win_rate != null ? s.win_rate : '--';
 
-  // Use real Kalshi balance if available, else fall back to tracked bankroll
+  // Always prefer real Kalshi balance; fall back to tracked values
   const displayBalance  = liveBalance || s.current_bankroll || 100;
-  const startingBalance = s.starting_bankroll || liveBalance || 100;
+  // Starting: use stored starting_bankroll only if it's not the placeholder $100
+  const storedStart     = s.starting_bankroll;
+  const startingBalance = (storedStart && storedStart !== 100)
+                            ? storedStart
+                            : (liveBalance || 100);
 
   let html = `
     <div class="bb-summary">

@@ -225,13 +225,22 @@ def get_open_positions() -> dict:
         for p in positions:
             ticker = p.get("ticker", "")
             qty    = p.get("position", p.get("quantity", 0))
-            # avg_price may be in cents already
-            avg    = p.get("market_exposure", p.get("avg_price_cents", p.get("avg_price", 0)))
-            if ticker and qty and qty != 0:
-                result[ticker] = {
-                    "quantity":  qty,
-                    "avg_price": avg,
-                }
+            if not ticker or not qty or qty == 0:
+                continue
+            # market_exposure is net exposure in cents (negative for long YES)
+            # avg price per contract = |exposure| / contracts
+            exposure = p.get("market_exposure", 0)
+            total_traded = p.get("total_traded", 0)
+            if total_traded and abs(qty) > 0:
+                avg = abs(total_traded) / abs(qty)   # cents per contract
+            elif exposure and abs(qty) > 0:
+                avg = abs(exposure) / abs(qty)
+            else:
+                avg = 0
+            result[ticker] = {
+                "quantity":  qty,
+                "avg_price": round(avg, 1),  # cents e.g. 40.0
+            }
         return result
     except Exception:
         return {}

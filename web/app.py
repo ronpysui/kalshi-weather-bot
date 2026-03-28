@@ -330,6 +330,8 @@ def api_baseball_debug():
         series        = discover_mlb_series()
         raw_markets   = get_open_mlb_markets(series)
         kalshi_events = get_mlb_events()
+        positions     = get_open_positions()
+        balance       = get_account_balance()
 
         return jsonify({
             "odds_games_count":    len(odds_games),
@@ -338,6 +340,8 @@ def api_baseball_debug():
             "kalshi_raw_markets":  len(raw_markets),
             "kalshi_sample":       raw_markets[:3] if raw_markets else [],
             "kalshi_events":       kalshi_events[:3],
+            "open_positions":      positions,
+            "account_balance":     balance,
         })
     except Exception as e:
         import traceback
