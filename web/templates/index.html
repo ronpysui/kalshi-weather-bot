@@ -931,10 +931,11 @@ async function loadBaseball(manual = false) {
 
               const commenceDate = new Date(g.commence);
               const pitchTime    = commenceDate.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',timeZone: TZ});
+              const pitchDate    = commenceDate.toLocaleDateString('en-US', {month:'short',day:'numeric',timeZone: TZ});
               const minsLabel    = isLive              ? '🔴 LIVE'
-                                 : g.mins_to_game < 5 ? `🟢 ${g.mins_to_game}m · ${pitchTime} CST`
-                                 : g.mins_to_game < 60? `🟡 ${g.mins_to_game}m · ${pitchTime} CST`
-                                 :                      `${pitchTime} CST`;
+                                 : g.mins_to_game < 5 ? `🟢 ${g.mins_to_game}m · ${pitchDate} ${pitchTime} CST`
+                                 : g.mins_to_game < 60? `🟡 ${g.mins_to_game}m · ${pitchDate} ${pitchTime} CST`
+                                 :                      `${pitchDate} · ${pitchTime} CST`;
 
               const cardOpacity  = (hasEdge || isLive) ? '1' : '0.5';
               const borderStyle  = hasEdge ? 'border-color:rgba(0,255,136,0.5);box-shadow:0 0 12px rgba(0,255,136,0.08)'
