@@ -103,6 +103,25 @@ def get_account_balance() -> float | None:
         return None
 
 
+def get_portfolio_value() -> dict | None:
+    """
+    Return full portfolio breakdown: cash, portfolio value, positions value.
+    """
+    try:
+        data = _get("/portfolio/balance", auth=True)
+        print(f"[kalshi] Raw balance response: {data}")
+        cash = data.get("balance", data.get("available_balance", 0))
+        portfolio = data.get("portfolio_value", cash)  # total including positions
+        return {
+            "cash": round(cash / 100, 2),
+            "portfolio": round(portfolio / 100, 2),
+            "raw": data,
+        }
+    except Exception as e:
+        print(f"[kalshi] Portfolio value error: {e}")
+        return None
+
+
 # ── Market data ───────────────────────────────────────────────────────────────
 
 def get_event(event_ticker: str) -> dict:

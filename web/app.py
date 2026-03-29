@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, render_template
 
 import config
-from kalshi.api import get_todays_markets, get_account_balance, get_open_positions, place_baseball_order
+from kalshi.api import get_todays_markets, get_account_balance, get_open_positions, place_baseball_order, get_portfolio_value
 from weather.nws_forecast import (
     get_effective_forecast, get_current_temp, get_running_high, get_7day_forecast,
     get_forecast_high_for_city, get_7day_forecast_for_city,
@@ -399,7 +399,9 @@ def api_baseball():
         odds_games    = get_mlb_games()
         kalshi_events = get_mlb_events()
         matched       = match_to_odds(kalshi_events, odds_games)
-        bankroll      = get_account_balance() or config.BANKROLL
+        portfolio     = get_portfolio_value() or {}
+        bankroll      = portfolio.get("cash") or get_account_balance() or config.BANKROLL
+        portfolio_val = portfolio.get("portfolio") or bankroll
         positions     = get_open_positions()  # keyed by ticker
 
         # Build signal index keyed by game_id for quick lookup
@@ -643,6 +645,7 @@ def api_baseball():
             "games":          games_out,
             "positions":      live_positions,   # from Kalshi API (source of truth)
             "bankroll":       bankroll,
+            "portfolio":      portfolio_val,     # cash + position market value
             "has_odds_key":   bool(os.getenv("ODDS_API_KEY")),
             "last_scan":      last_scan,
             "poll_interval":  config.POLL_INTERVAL_SECONDS,

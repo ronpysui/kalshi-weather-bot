@@ -859,10 +859,11 @@ async function loadBaseball(manual = false) {
     const data     = await res.json();
     let liveBalance = null;
     liveBalance = data.bankroll || null;
+    const portfolioVal = data.portfolio || liveBalance;
     const betsData = await betsRes.json();
 
     // ── Sidebar content (summary + chart + positions + past bets) ──────────
-    const sidebarHtml = renderBaseballBets(betsData, liveBalance, data.positions || [], mlbScores);
+    const sidebarHtml = renderBaseballBets(betsData, liveBalance, data.positions || [], mlbScores, portfolioVal);
 
     // ── Main column content ────────────────────────────────────────────────
     let mainHtml = '';
@@ -1412,7 +1413,7 @@ async function placeBaseballBet(gameId, side, contracts, price, teamName) {
   }
 }
 
-function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores) {
+function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores, portfolioVal) {
   livePositions = livePositions || [];
   mlbScores = mlbScores || {};
   const s    = betsData.summary || {};
@@ -1425,6 +1426,7 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores) {
 
   // Always prefer real Kalshi balance; fall back to tracked values
   const displayBalance  = liveBalance || s.current_bankroll || 100;
+  const displayPortfolio = portfolioVal || displayBalance;
   // Starting: use stored starting_bankroll only if it's not the placeholder $100
   const storedStart     = s.starting_bankroll;
   const startingBalance = (storedStart && storedStart !== 100)
@@ -1434,9 +1436,9 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores) {
   let html = `
     <div class="bb-summary">
       <div class="bb-stat">
-        <div class="bb-stat-label">Bankroll</div>
-        <div class="bb-stat-val" style="color:var(--green)">$${displayBalance.toFixed(2)}</div>
-        <div class="bb-stat-sub">started $${startingBalance.toFixed(2)}</div>
+        <div class="bb-stat-label">Portfolio</div>
+        <div class="bb-stat-val" style="color:var(--green)">$${displayPortfolio.toFixed(2)}</div>
+        <div class="bb-stat-sub">cash $${displayBalance.toFixed(2)}</div>
       </div>
       <div class="bb-stat">
         <div class="bb-stat-label">P&amp;L</div>
