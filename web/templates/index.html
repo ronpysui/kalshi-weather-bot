@@ -1192,8 +1192,9 @@ async function loadBaseball(manual = false) {
         </div>
       </div>`;
 
-      // Only show today's games
-      mainHtml += renderSection(todayGames, 'GAMES', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'America/Chicago'}));
+      // Show all upcoming games in one section (no today/tomorrow split)
+      const allGames = data.games.sort((a, b) => a.mins_to_game - b.mins_to_game);
+      mainHtml += renderSection(allGames, 'GAMES', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'America/Chicago'}));
 
       // ── RESULTS: completed games (today + yesterday) ──────────────────────
       const completedGames = Object.values(mlbScores).filter(sc => sc.done && sc.awayScore !== null);
