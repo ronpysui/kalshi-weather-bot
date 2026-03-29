@@ -19,6 +19,7 @@ ET = ZoneInfo("America/New_York")
 BASEBALL_MIN_EDGE    = float(os.getenv("BASEBALL_MIN_EDGE", "0.04"))  # 4 cents
 BASEBALL_KELLY_FRAC  = 0.25
 LOCK_OUT_MIN         = 30   # stop betting 30 min before first pitch (odds get stale)
+MAX_BET_HOURS_BEFORE = 12   # only bet on games starting within 12 hours
 
 
 @dataclass
@@ -83,6 +84,10 @@ def analyze_game(game: dict) -> list[BaseballSignal]:
 
     # Hard stop: game has started — no more bets
     if mins_left <= LOCK_OUT_MIN:
+        return []
+
+    # Don't bet too early — wait until game is within MAX_BET_HOURS_BEFORE hours
+    if mins_left > MAX_BET_HOURS_BEFORE * 60:
         return []
 
     kalshi = game.get("kalshi", {})
