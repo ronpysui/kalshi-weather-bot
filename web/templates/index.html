@@ -1471,6 +1471,80 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores, por
       <canvas id="bb-pnl-chart" height="70"></canvas>
     </div>`;
 
+  // ── P&L Calendar ──────────────────────────────────────────────────────────
+  // Group resolved bets by date, show daily P&L in a calendar grid
+  const resolvedForCal = bets.filter(b => b.status === 'won' || b.status === 'lost');
+  const dailyPnl = {};
+  for (const b of resolvedForCal) {
+    const d = (b.resolved_at || b.date_placed || b.timestamp || '').slice(0, 10);
+    if (!d) continue;
+    if (!dailyPnl[d]) dailyPnl[d] = { pnl: 0, bets: 0, wins: 0 };
+    dailyPnl[d].pnl += (b.pnl || 0);
+    dailyPnl[d].bets++;
+    if (b.status === 'won') dailyPnl[d].wins++;
+  }
+
+  // Build calendar for current month
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const monthName = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  let calHtml = `<div class="panel-label" style="margin:10px 0 6px">P&L CALENDAR · ${monthName}</div>`;
+  calHtml += `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:9px;margin-bottom:14px">`;
+  // Day headers
+  for (const d of ['S','M','T','W','T','F','S']) {
+    calHtml += `<div style="text-align:center;color:var(--text-dim);font-weight:600;padding:2px 0">${d}</div>`;
+  }
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) {
+    calHtml += `<div></div>`;
+  }
+  // Days
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dp = dailyPnl[dateStr];
+    const isToday = day === now.getDate();
+    let bg = 'transparent';
+    let color = 'var(--text-dim)';
+    let content = `${day}`;
+
+    if (dp) {
+      bg = dp.pnl >= 0 ? 'rgba(0,255,136,0.12)' : 'rgba(255,68,102,0.12)';
+      color = dp.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+      const pctGain = startingBalance > 0 ? ((dp.pnl / startingBalance) * 100).toFixed(1) : '0';
+      content = `<div style="font-weight:700">${day}</div>
+                 <div style="font-size:7px">${dp.pnl >= 0 ? '+' : ''}$${dp.pnl.toFixed(2)}</div>
+                 <div style="font-size:6px;color:var(--text-dim)">${dp.wins}/${dp.bets}W</div>`;
+    }
+
+    const border = isToday ? 'border:1px solid var(--cyan)' : 'border:1px solid transparent';
+    calHtml += `<div style="text-align:center;padding:3px 1px;background:${bg};color:${color};
+                 border-radius:3px;${border};min-height:28px;display:flex;flex-direction:column;
+                 justify-content:center;align-items:center">${content}</div>`;
+  }
+  calHtml += `</div>`;
+
+  // Monthly summary
+  const totalCalPnl = Object.values(dailyPnl).reduce((s, d) => s + d.pnl, 0);
+  const totalCalBets = Object.values(dailyPnl).reduce((s, d) => s + d.bets, 0);
+  const totalCalWins = Object.values(dailyPnl).reduce((s, d) => s + d.wins, 0);
+  const monthPct = startingBalance > 0 ? ((totalCalPnl / startingBalance) * 100).toFixed(1) : '0';
+  if (totalCalBets > 0) {
+    calHtml += `<div style="display:flex;gap:12px;font-size:9px;margin-bottom:10px;padding:4px 6px;
+                 background:var(--bg2);border-radius:4px;border:1px solid var(--border)">
+      <span style="color:${totalCalPnl >= 0 ? 'var(--green)' : 'var(--red)'}">
+        ${totalCalPnl >= 0 ? '+' : ''}$${Math.abs(totalCalPnl).toFixed(2)} (${monthPct}%)
+      </span>
+      <span class="dim">${totalCalBets} bets</span>
+      <span class="dim">${totalCalWins}W ${totalCalBets - totalCalWins}L</span>
+    </div>`;
+  }
+
+  html += calHtml;
+
   // Split into pending (current positions) vs resolved (history includes canceled)
   const pending  = bets.filter(b => b.status === 'pending');
   const resolved = bets.filter(b => b.status !== 'pending');
