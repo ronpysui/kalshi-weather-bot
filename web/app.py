@@ -478,64 +478,7 @@ def api_baseball():
                 "away_position": away_pos,
             })
 
-        # ── Sync bet log with live Kalshi positions ─────────────────────────────
-        try:
-            from baseball.bet_log import _load as _load_bets, _save as _save_bets, log_bet as _auto_log
-            from datetime import timezone as _tz
-            existing_bets = _load_bets()
-            logged_tickers = {b.get("ticker") for b in existing_bets}
-            open_tickers = {t for t, p in positions.items() if p.get("quantity", 0) > 0}
-            dirty = False
-
-            # 1. Auto-log positions not yet in bet log
-            for g_out in games_out:
-                for side_key in ("home", "away"):
-                    pos = g_out.get(f"{side_key}_position")
-                    ticker = g_out.get(f"{side_key}_ticker", "")
-                    if not pos or not ticker or pos.get("quantity", 0) <= 0:
-                        continue
-                    if ticker in logged_tickers:
-                        # Update price to match actual Kalshi fill price
-                        for b in existing_bets:
-                            if b.get("ticker") == ticker and b.get("status") == "pending":
-                                real_avg = int(round(pos.get("avg_price", b.get("price_cents", 50))))
-                                if b.get("price_cents") != real_avg:
-                                    b["price_cents"] = real_avg
-                                    b["contracts"] = pos["quantity"]
-                                    b["cost"] = round(pos["quantity"] * real_avg / 100, 2)
-                                    dirty = True
-                        continue
-                    team = g_out["home"] if side_key == "home" else g_out["away"]
-                    sig = g_out.get(f"{side_key}_signal") or {}
-                    avg_cents = int(round(pos.get("avg_price", 50)))
-                    _auto_log(
-                        home=g_out["home"], away=g_out["away"], team=team,
-                        side=side_key, ticker=ticker,
-                        contracts=pos["quantity"], price_cents=avg_cents,
-                        vegas_prob=sig.get("vegas_prob", 0), edge=sig.get("edge", 0),
-                        game_id=g_out["id"],
-                        game_date=g_out["commence"][:10] if g_out.get("commence") else "",
-                    )
-                    logged_tickers.add(ticker)
-
-            # 2. Auto-cancel: pending bets whose ticker has no open Kalshi position
-            for b in existing_bets:
-                if b.get("status") != "pending":
-                    continue
-                ticker = b.get("ticker", "")
-                if ticker and ticker not in open_tickers:
-                    b["status"] = "canceled"
-                    b["result"] = "canceled"
-                    b["pnl"] = 0
-                    b["resolved_at"] = datetime.now(_tz.utc).isoformat()
-                    dirty = True
-
-            if dirty:
-                _save_bets(existing_bets)
-        except Exception:
-            pass  # never break the API response
-
-        # MLB team abbreviation → full name mapping
+        # MLB team abbreviation → full name mapping (used by sync + positions)
         _MLB_ABBR = {
             "ARI": "Arizona Diamondbacks", "ATL": "Atlanta Braves",
             "BAL": "Baltimore Orioles", "BOS": "Boston Red Sox",
@@ -558,7 +501,7 @@ def api_baseball():
             """Extract team name from Kalshi ticker like KXMLBGAME-26MAR312140NYYSEA-SEA"""
             parts = ticker.split("-")
             if len(parts) >= 3:
-                abbr = parts[-1]  # e.g. "SEA"
+                abbr = parts[-1]
                 return _MLB_ABBR.get(abbr, abbr)
             return ticker
 
@@ -566,17 +509,13 @@ def api_baseball():
             """Extract home/away from ticker like KXMLBGAME-26MAR312140NYYSEA-SEA"""
             parts = ticker.split("-")
             if len(parts) >= 3:
-                bet_team = parts[-1]  # e.g. "SEA"
-                # The middle part ends with 2 team codes: e.g. "26MAR312140NYYSEA"
+                bet_team = parts[-1]
                 mid = parts[1]
-                # Extract teams — last 6 chars are usually 2x 3-letter codes
-                # But some are 2-letter (KC, SF, SD, TB) so try different splits
                 teams_str = ""
                 for i in range(len(mid)):
                     if mid[i:].isalpha():
                         teams_str = mid[i:]
                         break
-                # Try to split into two teams
                 away_abbr, home_abbr = "", ""
                 for split_pos in range(2, len(teams_str) - 1):
                     a = teams_str[:split_pos]
@@ -589,6 +528,97 @@ def api_baseball():
                 side = "home" if bet_team == home_abbr else "away"
                 return away, home, side
             return "", "", "away"
+
+        # ── Sync bet log with live Kalshi positions ─────────────────────────────
+        try:
+            from baseball.bet_log import _load as _load_bets, _save as _save_bets, log_bet as _auto_log
+            from datetime import timezone as _tz
+            existing_bets = _load_bets()
+            logged_tickers = {b.get("ticker") for b in existing_bets}
+            open_tickers = {t for t, p in positions.items() if p.get("quantity", 0) > 0}
+            dirty = False
+
+            # 1. Auto-log positions not yet in bet log
+            #    First try matching via games_out, then fall back to ticker parsing
+            for ticker, pos in positions.items():
+                if pos.get("quantity", 0) <= 0:
+                    continue
+                qty = pos["quantity"]
+                avg_cents = int(round(pos.get("avg_price", 50)))
+
+                if ticker in logged_tickers:
+                    # Update price/qty to match actual Kalshi fill
+                    for b in existing_bets:
+                        if b.get("ticker") == ticker and b.get("status") == "pending":
+                            if b.get("price_cents") != avg_cents or b.get("contracts") != qty:
+                                b["price_cents"] = avg_cents
+                                b["contracts"] = qty
+                                b["cost"] = round(qty * avg_cents / 100, 2)
+                                dirty = True
+                    continue
+
+                # Not yet logged — try to find game info from games_out
+                game_info = next((go for go in games_out
+                    if go.get("home_ticker") == ticker or go.get("away_ticker") == ticker), None)
+
+                if game_info:
+                    side_key = "home" if game_info.get("home_ticker") == ticker else "away"
+                    home = game_info["home"]
+                    away = game_info["away"]
+                    team = home if side_key == "home" else away
+                    game_id = game_info["id"]
+                    game_date = game_info["commence"][:10] if game_info.get("commence") else ""
+                else:
+                    # Fallback: parse from ticker (works even when Odds API has no quota)
+                    away, home, side_key = _parse_ticker_matchup(ticker)
+                    team = _parse_ticker_team(ticker)
+                    game_id = ""
+                    game_date = ""
+
+                _auto_log(
+                    home=home, away=away, team=team,
+                    side=side_key, ticker=ticker,
+                    contracts=qty, price_cents=avg_cents,
+                    vegas_prob=0, edge=0,
+                    game_id=game_id, game_date=game_date,
+                )
+                logged_tickers.add(ticker)
+
+            # 2. Auto-cancel: pending bets whose ticker has no open Kalshi position
+            #    NEVER touch resolved (won/lost) bets — only cancel pending ones
+            for b in existing_bets:
+                if b.get("status") not in ("pending",):
+                    continue  # skip won, lost, canceled — never overwrite resolved bets
+                ticker = b.get("ticker", "")
+                if ticker and ticker not in open_tickers:
+                    b["status"] = "canceled"
+                    b["result"] = "canceled"
+                    b["pnl"] = 0
+                    b["resolved_at"] = datetime.now(_tz.utc).isoformat()
+                    dirty = True
+
+            # 3. Fix corrupted team names in existing bets (from earlier bug)
+            for b in existing_bets:
+                t = b.get("ticker", "")
+                if not t or "KXMLBGAME" not in t:
+                    continue
+                parsed_away, parsed_home, parsed_side = _parse_ticker_matchup(t)
+                parsed_team = _parse_ticker_team(t)
+                if parsed_home and b.get("home") != parsed_home:
+                    b["home"] = parsed_home
+                    b["away"] = parsed_away
+                    b["team"] = parsed_team
+                    b["team_bet_on"] = parsed_team
+                    b["side"] = parsed_side
+                    b["bet_side"] = parsed_side
+                    b["teams"] = f"{parsed_away} @ {parsed_home}"
+                    dirty = True
+
+            if dirty:
+                _save_bets(existing_bets)
+        except Exception as e:
+            print(f"[sync] Bet log sync error: {e}")
+            import traceback; traceback.print_exc()
 
         # Build positions summary from live Kalshi data (source of truth)
         live_positions = []
