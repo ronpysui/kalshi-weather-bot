@@ -539,83 +539,86 @@ def api_baseball():
             dirty = False
 
             # 1. Auto-log positions not yet in bet log
-            #    First try matching via games_out, then fall back to ticker parsing
-            for ticker, pos in positions.items():
-                if pos.get("quantity", 0) <= 0:
-                    continue
-                qty = pos["quantity"]
-                avg_cents = int(round(pos.get("avg_price", 50)))
+            try:
+                for ticker, pos in positions.items():
+                    if pos.get("quantity", 0) <= 0:
+                        continue
+                    qty = pos["quantity"]
+                    avg_cents = int(round(pos.get("avg_price", 50)))
+                    if ticker in logged_tickers:
+                        for b in existing_bets:
+                            if b.get("ticker") == ticker and b.get("status") == "pending":
+                                if b.get("price_cents") != avg_cents or b.get("contracts") != qty:
+                                    b["price_cents"] = avg_cents
+                                    b["contracts"] = qty
+                                    b["cost"] = round(qty * avg_cents / 100, 2)
+                                    dirty = True
+                        continue
+                    game_info = next((go for go in games_out
+                        if go.get("home_ticker") == ticker or go.get("away_ticker") == ticker), None)
+                    if game_info:
+                        side_key = "home" if game_info.get("home_ticker") == ticker else "away"
+                        home_name = game_info["home"]
+                        away_name = game_info["away"]
+                        team_name = home_name if side_key == "home" else away_name
+                        game_id = game_info["id"]
+                        game_date = game_info["commence"][:10] if game_info.get("commence") else ""
+                    else:
+                        away_name, home_name, side_key = _parse_ticker_matchup(ticker)
+                        team_name = _parse_ticker_team(ticker)
+                        game_id = ""
+                        game_date = ""
+                    _auto_log(
+                        home=home_name, away=away_name, team=team_name,
+                        side=side_key, ticker=ticker,
+                        contracts=qty, price_cents=avg_cents,
+                        vegas_prob=0, edge=0,
+                        game_id=game_id, game_date=game_date,
+                    )
+                    logged_tickers.add(ticker)
+            except Exception as e1:
+                print(f"[sync] Step 1 auto-log error: {e1}")
 
-                if ticker in logged_tickers:
-                    # Update price/qty to match actual Kalshi fill
-                    for b in existing_bets:
-                        if b.get("ticker") == ticker and b.get("status") == "pending":
-                            if b.get("price_cents") != avg_cents or b.get("contracts") != qty:
-                                b["price_cents"] = avg_cents
-                                b["contracts"] = qty
-                                b["cost"] = round(qty * avg_cents / 100, 2)
-                                dirty = True
-                    continue
+            # 2. Auto-cancel: pending bets with no open position (never touch won/lost)
+            try:
+                for b in existing_bets:
+                    if b.get("status") != "pending":
+                        continue
+                    ticker = b.get("ticker", "")
+                    if ticker and ticker not in open_tickers:
+                        b["status"] = "canceled"
+                        b["result"] = "canceled"
+                        b["pnl"] = 0
+                        b["resolved_at"] = datetime.now(_tz.utc).isoformat()
+                        dirty = True
+            except Exception as e2:
+                print(f"[sync] Step 2 auto-cancel error: {e2}")
 
-                # Not yet logged — try to find game info from games_out
-                game_info = next((go for go in games_out
-                    if go.get("home_ticker") == ticker or go.get("away_ticker") == ticker), None)
-
-                if game_info:
-                    side_key = "home" if game_info.get("home_ticker") == ticker else "away"
-                    home = game_info["home"]
-                    away = game_info["away"]
-                    team = home if side_key == "home" else away
-                    game_id = game_info["id"]
-                    game_date = game_info["commence"][:10] if game_info.get("commence") else ""
-                else:
-                    # Fallback: parse from ticker (works even when Odds API has no quota)
-                    away, home, side_key = _parse_ticker_matchup(ticker)
-                    team = _parse_ticker_team(ticker)
-                    game_id = ""
-                    game_date = ""
-
-                _auto_log(
-                    home=home, away=away, team=team,
-                    side=side_key, ticker=ticker,
-                    contracts=qty, price_cents=avg_cents,
-                    vegas_prob=0, edge=0,
-                    game_id=game_id, game_date=game_date,
-                )
-                logged_tickers.add(ticker)
-
-            # 2. Auto-cancel: pending bets whose ticker has no open Kalshi position
-            #    NEVER touch resolved (won/lost) bets — only cancel pending ones
-            for b in existing_bets:
-                if b.get("status") not in ("pending",):
-                    continue  # skip won, lost, canceled — never overwrite resolved bets
-                ticker = b.get("ticker", "")
-                if ticker and ticker not in open_tickers:
-                    b["status"] = "canceled"
-                    b["result"] = "canceled"
-                    b["pnl"] = 0
-                    b["resolved_at"] = datetime.now(_tz.utc).isoformat()
-                    dirty = True
-
-            # 3. Fix corrupted team names in existing bets (from earlier bug)
-            for b in existing_bets:
-                t = b.get("ticker", "")
-                if not t or "KXMLBGAME" not in t:
-                    continue
-                parsed_away, parsed_home, parsed_side = _parse_ticker_matchup(t)
-                parsed_team = _parse_ticker_team(t)
-                if parsed_home and b.get("home") != parsed_home:
-                    b["home"] = parsed_home
-                    b["away"] = parsed_away
-                    b["team"] = parsed_team
-                    b["team_bet_on"] = parsed_team
-                    b["side"] = parsed_side
-                    b["bet_side"] = parsed_side
-                    b["teams"] = f"{parsed_away} @ {parsed_home}"
-                    dirty = True
+            # 3. Fix corrupted team names by re-parsing ticker (always runs)
+            try:
+                for b in existing_bets:
+                    t = b.get("ticker", "")
+                    if not t or "KXMLBGAME" not in t:
+                        continue
+                    parsed_away, parsed_home, parsed_side = _parse_ticker_matchup(t)
+                    parsed_team = _parse_ticker_team(t)
+                    if parsed_home and b.get("home") != parsed_home:
+                        b["home"] = parsed_home
+                        b["away"] = parsed_away
+                        b["team"] = parsed_team
+                        b["team_bet_on"] = parsed_team
+                        b["side"] = parsed_side
+                        b["bet_side"] = parsed_side
+                        b["teams"] = f"{parsed_away} @ {parsed_home}"
+                        dirty = True
+                        print(f"[sync] Fixed team names for {t}: {parsed_away} @ {parsed_home} → {parsed_team}")
+            except Exception as e3:
+                print(f"[sync] Step 3 fix names error: {e3}")
 
             if dirty:
                 _save_bets(existing_bets)
+                # Reload so subsequent code sees fixed data
+                existing_bets = _load_bets()
         except Exception as e:
             print(f"[sync] Bet log sync error: {e}")
             import traceback; traceback.print_exc()

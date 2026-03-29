@@ -1527,10 +1527,11 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores, por
                 <span class="dim" style="font-size:9px">${p.away} @ ${p.home}</span>
                 ${scoreLine}
               </div>
-              <div style="display:flex;gap:8px;font-size:9px">
+              <div style="display:flex;gap:8px;font-size:9px;align-items:center">
                 <span>${p.quantity}x @ ${p.avg_price}¢</span>
                 <span style="color:var(--yellow)">cost $${p.cost.toFixed(2)}</span>
                 <span style="color:var(--green)">win +$${p.to_win.toFixed(2)}</span>
+                <span style="color:var(--cyan);font-weight:700">${((p.cost + p.to_win) / p.cost).toFixed(2)}x</span>
               </div>
             </div>`;
           }).join('')}
@@ -1562,70 +1563,19 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores, por
       </div>`;
   }
 
-  // ── BET RESULTS — all bets (active + resolved) with live scores + P&L ─────
-  const allBetsForResults = [...bets];
-  // Also include live positions that might not be in the bet log yet
-  for (const pos of livePositions) {
-    const already = allBetsForResults.find(b => b.ticker === pos.ticker);
-    if (!already) {
-      allBetsForResults.push({
-        team: pos.team, home: pos.home, away: pos.away,
-        contracts: pos.quantity, price_cents: pos.avg_price,
-        side: pos.side, ticker: pos.ticker,
-        vegas_prob: '—', edge: '—', status: 'pending',
-        timestamp: new Date().toISOString(), _fromPosition: true,
-      });
-    }
-  }
+  // ── BET RESULTS — only show RESOLVED bets (won/lost/canceled) ─────────────
+  const resolvedBets = bets.filter(b => b.status === 'won' || b.status === 'lost');
+  const totalPnl = resolvedBets.reduce((sum, b) => sum + (b.pnl || 0), 0);
 
-  if (allBetsForResults.length) {
-    // Separate active (pending) from resolved
-    const activeBets = allBetsForResults.filter(b => b.status === 'pending');
-    const resolvedBets = allBetsForResults.filter(b => b.status !== 'pending');
-    const totalPnl = resolvedBets.reduce((sum, b) => sum + (b.pnl || 0), 0);
-
+  if (resolvedBets.length) {
     html += `
       <div class="panel-label" style="margin-bottom:8px">
-        BET RESULTS &nbsp;
-        <span class="dim" style="font-size:10px">${activeBets.length} active · ${resolvedBets.length} resolved</span>
-        ${resolvedBets.length ? `<span style="margin-left:8px;font-size:10px;font-weight:700;color:${totalPnl >= 0 ? 'var(--green)' : 'var(--red)'}">
+        TODAY'S RESULTS &nbsp;
+        <span class="dim" style="font-size:10px">${resolvedBets.length} completed</span>
+        <span style="margin-left:8px;font-size:10px;font-weight:700;color:${totalPnl >= 0 ? 'var(--green)' : 'var(--red)'}">
           ${totalPnl >= 0 ? '+' : ''}$${Math.abs(totalPnl).toFixed(2)}
-        </span>` : ''}
+        </span>
       </div>`;
-
-    // ── Active bets with live scores ──────────────────────────────────────
-    if (activeBets.length) {
-      html += `<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px">
-        ${activeBets.map(b => {
-          const sc = _scoreKey(mlbScores, b.away, b.home);
-          const cost = (b.contracts * b.price_cents / 100).toFixed(2);
-          const potWin = (b.contracts * (100 - b.price_cents) / 100).toFixed(2);
-          const gameStarted = sc && (sc.inProgress || sc.done);
-          const scoreStr = sc && sc.awayScore !== null ? `${sc.awayScore} – ${sc.homeScore}` : '';
-          const situStr = sc && sc.done ? 'Final'
-            : sc && sc.inning ? `${sc.half === 'Bottom' ? '▼' : '▲'}${sc.inning}`
-            : sc && sc.inProgress ? 'Live' : '';
-
-          return `
-          <div style="padding:5px 7px;background:var(--bg2);border:1px solid rgba(0,212,255,0.12);border-radius:4px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-              <span style="font-size:10px;font-weight:700;color:var(--text-bright)">${b.team} YES</span>
-              ${gameStarted
-                ? `<span style="font-size:9px;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums">
-                    ${scoreStr} <span class="dim" style="font-size:8px">${situStr}</span></span>`
-                : `<span style="font-size:8px;color:var(--cyan)">⏱ waiting</span>`}
-            </div>
-            <div class="dim" style="font-size:8px;margin-bottom:2px">${b.away} @ ${b.home}</div>
-            <div style="display:flex;gap:6px;font-size:9px">
-              <span>${b.contracts}x @ ${b.price_cents}¢</span>
-              <span style="color:var(--yellow)">risk $${cost}</span>
-              <span style="color:var(--green)">win +$${potWin}</span>
-              ${b.edge !== '—' ? `<span class="dim">edge +${b.edge}c</span>` : ''}
-            </div>
-          </div>`;
-        }).join('')}
-      </div>`;
-    }
 
     // ── Resolved bets table ───────────────────────────────────────────────
     if (resolvedBets.length) {
@@ -1662,9 +1612,10 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores, por
       </div>`;
     }
   } else {
+    // No resolved bets yet — show a subtle message
     html += `
       <div style="color:var(--text-dim);font-size:11px;margin-bottom:14px;padding:12px 0">
-        No bets placed yet — bot will auto-bet when edge is found.
+        No completed bets yet — results appear when games finish.
       </div>`;
   }
 
