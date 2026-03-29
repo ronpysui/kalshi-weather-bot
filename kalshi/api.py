@@ -105,17 +105,36 @@ def get_account_balance() -> float | None:
 
 def get_portfolio_value() -> dict | None:
     """
-    Return full portfolio breakdown: cash, portfolio value, positions value.
+    Return full portfolio breakdown: cash balance + position cost = portfolio.
+    Kalshi balance API doesn't include portfolio_value, so we compute it
+    from cash + sum of open position exposure.
     """
     try:
         data = _get("/portfolio/balance", auth=True)
         print(f"[kalshi] Raw balance response: {data}")
-        cash = data.get("balance", data.get("available_balance", 0))
-        portfolio = data.get("portfolio_value", cash)  # total including positions
+        # balance = total cash including locked in resting orders
+        # available_balance = free cash (not locked)
+        total_cash = data.get("balance", data.get("available_balance", 0))
+        available_cash = data.get("available_balance", total_cash)
+
+        # Get position values from positions API
+        positions_value = 0
+        try:
+            pos_data = _get("/portfolio/positions", params={"limit": 1000}, auth=True)
+            for p in pos_data.get("market_positions", []):
+                qty = float(p.get("position_fp", 0) or 0)
+                exposure = abs(float(p.get("market_exposure_dollars", 0) or 0))
+                if qty > 0:
+                    positions_value += exposure
+        except Exception:
+            pass
+
+        portfolio = round((total_cash / 100) + positions_value, 2)
         return {
-            "cash": round(cash / 100, 2),
-            "portfolio": round(portfolio / 100, 2),
-            "raw": data,
+            "cash": round(available_cash / 100, 2),
+            "portfolio": portfolio,
+            "total_cash": round(total_cash / 100, 2),
+            "positions_value": round(positions_value, 2),
         }
     except Exception as e:
         print(f"[kalshi] Portfolio value error: {e}")
