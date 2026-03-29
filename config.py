@@ -65,7 +65,7 @@ BACKTEST_SIMULATIONS    = 500   # Monte Carlo runs per day
 BACKTEST_FORECAST_SIGMA = 2.5   # simulated NWS forecast error (°F)
 
 # ── Scheduler ────────────────────────────────────────────────────────────────
-POLL_INTERVAL_SECONDS = 600    # 10 minutes (baseball edge scanning)
+POLL_INTERVAL_SECONDS = 1800   # 30 minutes (baseball edge scanning)
 MARKET_OPEN_HOUR_ET   = 6
 MARKET_CLOSE_HOUR_ET  = 20
 

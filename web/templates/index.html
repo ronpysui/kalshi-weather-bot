@@ -537,7 +537,8 @@
       <div class="section-title">baseball · mlb</div>
       <div style="display:flex;align-items:center;gap:12px">
         <span class="dim" style="font-size:11px">vegas consensus vs kalshi · pre-game EV</span>
-        <span style="font-size:10px;color:var(--text-dim)">bot scans: <span style="color:var(--cyan)">10AM–12AM ET</span> · every 10min</span>
+        <span style="font-size:10px;color:var(--text-dim)">bot scans: <span style="color:var(--cyan)">10AM–12AM ET</span> · every 30min</span>
+        <span id="bb-odds-quota" style="font-size:10px;color:var(--text-dim)"></span>
         <span id="bb-refresh-label" class="dim" style="font-size:11px"></span>
         <button class="btn" onclick="loadBaseball(true)">↺ refresh</button>
       </div>
@@ -1301,6 +1302,14 @@ async function loadBaseball(manual = false) {
     // ── Compose two-column layout ───────────────────────────────────────────
     el.innerHTML = `<div class="dashboard-grid"><div class="dash-main">${mainHtml}</div><div class="dash-sidebar">${sidebarHtml}</div></div>`;
     renderPnlChart(betsData, liveBalance);
+    // Update Odds API quota in header
+    const quotaEl = document.getElementById('bb-odds-quota');
+    if (quotaEl && data.odds_remaining !== undefined && data.odds_remaining !== null) {
+      const rem = parseInt(data.odds_remaining);
+      const color = rem > 1000 ? 'var(--green-dim)' : rem > 100 ? 'var(--yellow)' : 'var(--red)';
+      quotaEl.innerHTML = `API: <span style="color:${color}">${rem.toLocaleString()}</span> left`;
+    }
+
     // Start countdowns AFTER DOM is updated so elements exist
     if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].mins_to_game);
     if (data.last_scan) _bbStartScanCountdown();
