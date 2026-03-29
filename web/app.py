@@ -532,6 +532,61 @@ def api_baseball():
         except Exception:
             pass  # never break the API response
 
+        # MLB team abbreviation → full name mapping
+        _MLB_ABBR = {
+            "ARI": "Arizona Diamondbacks", "ATL": "Atlanta Braves",
+            "BAL": "Baltimore Orioles", "BOS": "Boston Red Sox",
+            "CHC": "Chicago Cubs", "CWS": "Chicago White Sox", "CHW": "Chicago White Sox",
+            "CIN": "Cincinnati Reds", "CLE": "Cleveland Guardians",
+            "COL": "Colorado Rockies", "DET": "Detroit Tigers",
+            "HOU": "Houston Astros", "KC": "Kansas City Royals", "KCR": "Kansas City Royals",
+            "LAA": "Los Angeles Angels", "LAD": "Los Angeles Dodgers",
+            "MIA": "Miami Marlins", "MIL": "Milwaukee Brewers",
+            "MIN": "Minnesota Twins", "NYM": "New York Mets", "NYY": "New York Yankees",
+            "OAK": "Oakland Athletics", "PHI": "Philadelphia Phillies",
+            "PIT": "Pittsburgh Pirates", "SD": "San Diego Padres", "SDP": "San Diego Padres",
+            "SEA": "Seattle Mariners", "SF": "San Francisco Giants", "SFG": "San Francisco Giants",
+            "STL": "St. Louis Cardinals", "TB": "Tampa Bay Rays", "TBR": "Tampa Bay Rays",
+            "TEX": "Texas Rangers", "TOR": "Toronto Blue Jays",
+            "WAS": "Washington Nationals", "WSH": "Washington Nationals", "WSN": "Washington Nationals",
+        }
+
+        def _parse_ticker_team(ticker):
+            """Extract team name from Kalshi ticker like KXMLBGAME-26MAR312140NYYSEA-SEA"""
+            parts = ticker.split("-")
+            if len(parts) >= 3:
+                abbr = parts[-1]  # e.g. "SEA"
+                return _MLB_ABBR.get(abbr, abbr)
+            return ticker
+
+        def _parse_ticker_matchup(ticker):
+            """Extract home/away from ticker like KXMLBGAME-26MAR312140NYYSEA-SEA"""
+            parts = ticker.split("-")
+            if len(parts) >= 3:
+                bet_team = parts[-1]  # e.g. "SEA"
+                # The middle part ends with 2 team codes: e.g. "26MAR312140NYYSEA"
+                mid = parts[1]
+                # Extract teams — last 6 chars are usually 2x 3-letter codes
+                # But some are 2-letter (KC, SF, SD, TB) so try different splits
+                teams_str = ""
+                for i in range(len(mid)):
+                    if mid[i:].isalpha():
+                        teams_str = mid[i:]
+                        break
+                # Try to split into two teams
+                away_abbr, home_abbr = "", ""
+                for split_pos in range(2, len(teams_str) - 1):
+                    a = teams_str[:split_pos]
+                    h = teams_str[split_pos:]
+                    if a in _MLB_ABBR and h in _MLB_ABBR:
+                        away_abbr, home_abbr = a, h
+                        break
+                away = _MLB_ABBR.get(away_abbr, away_abbr)
+                home = _MLB_ABBR.get(home_abbr, home_abbr)
+                side = "home" if bet_team == home_abbr else "away"
+                return away, home, side
+            return "", "", "away"
+
         # Build positions summary from live Kalshi data (source of truth)
         live_positions = []
         for ticker, pos in positions.items():
@@ -542,19 +597,33 @@ def api_baseball():
                               if go.get("home_ticker") == ticker or go.get("away_ticker") == ticker), None)
             avg_cents = int(round(pos.get("avg_price", 0)))
             qty = pos["quantity"]
+
+            if game_info:
+                home = game_info["home"]
+                away = game_info["away"]
+                team = home if game_info.get("home_ticker") == ticker else away
+                side = "home" if game_info.get("home_ticker") == ticker else "away"
+                commence = game_info.get("commence")
+                mins = game_info.get("mins_to_game")
+            else:
+                # Fallback: parse team names from ticker
+                away, home, side = _parse_ticker_matchup(ticker)
+                team = _parse_ticker_team(ticker)
+                commence = None
+                mins = None
+
             live_positions.append({
                 "ticker":    ticker,
                 "quantity":  qty,
                 "avg_price": avg_cents,
                 "cost":      round(qty * avg_cents / 100, 2),
                 "to_win":    round(qty * (100 - avg_cents) / 100, 2),
-                "home":      game_info["home"] if game_info else "",
-                "away":      game_info["away"] if game_info else "",
-                "team":      game_info["home"] if game_info and game_info.get("home_ticker") == ticker
-                             else game_info["away"] if game_info else ticker,
-                "side":      "home" if game_info and game_info.get("home_ticker") == ticker else "away",
-                "commence":  game_info.get("commence") if game_info else None,
-                "mins_to_game": game_info.get("mins_to_game") if game_info else None,
+                "home":      home,
+                "away":      away,
+                "team":      team,
+                "side":      side,
+                "commence":  commence,
+                "mins_to_game": mins,
             })
 
         # Last bot scan timestamp — seed from web server if bot hasn't run yet
