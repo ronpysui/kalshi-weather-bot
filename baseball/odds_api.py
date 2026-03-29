@@ -18,6 +18,14 @@ def _api_key() -> str:
     return os.getenv("ODDS_API_KEY", "")
 
 
+_last_quota = {"remaining": None, "used": None}
+
+
+def get_odds_quota():
+    """Return the last known Odds API quota info."""
+    return dict(_last_quota)
+
+
 def get_mlb_games() -> list[dict]:
     """
     Return today's MLB games with devigged consensus win probabilities.
@@ -37,6 +45,7 @@ def get_mlb_games() -> list[dict]:
     """
     key = _api_key()
     if not key:
+        print("[odds_api] No ODDS_API_KEY set")
         return []
 
     try:
@@ -51,6 +60,10 @@ def get_mlb_games() -> list[dict]:
             },
             timeout=10,
         )
+        # Capture quota headers
+        _last_quota["remaining"] = resp.headers.get("x-requests-remaining")
+        _last_quota["used"] = resp.headers.get("x-requests-used")
+        print(f"[odds_api] Quota: {_last_quota['remaining']} remaining, {_last_quota['used']} used")
         resp.raise_for_status()
         data = resp.json()
     except Exception as e:

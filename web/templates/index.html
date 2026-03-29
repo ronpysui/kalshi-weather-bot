@@ -1284,6 +1284,20 @@ async function loadBaseball(manual = false) {
       }
     }
 
+    // ── Empty state if no games ─────────────────────────────────────────────
+    if (!data.games || !data.games.length) {
+      mainHtml += `<div style="padding:40px 20px;text-align:center">
+        <div style="font-size:18px;color:var(--text-dim);margin-bottom:12px">⚠ No MLB games loaded</div>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.8">
+          Possible causes:<br>
+          • Odds API quota exhausted (free tier = 500/month)<br>
+          • No MLB games scheduled right now<br>
+          • API returned an error — check /api/baseball/debug<br>
+          ${data.odds_remaining !== undefined ? '<br>Odds API remaining: <b>' + data.odds_remaining + '</b>' : ''}
+        </div>
+      </div>`;
+    }
+
     // ── Compose two-column layout ───────────────────────────────────────────
     el.innerHTML = `<div class="dashboard-grid"><div class="dash-main">${mainHtml}</div><div class="dash-sidebar">${sidebarHtml}</div></div>`;
     renderPnlChart(betsData, liveBalance);

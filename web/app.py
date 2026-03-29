@@ -394,6 +394,7 @@ def api_baseball():
         from baseball.odds_api import get_mlb_games
         from baseball.kalshi_mlb import get_mlb_events, match_to_odds
         from baseball.analyzer import analyze_all, analyze_game, minutes_to_first_pitch, LOCK_OUT_MIN
+        from baseball.odds_api import get_odds_quota
 
         odds_games    = get_mlb_games()
         kalshi_events = get_mlb_events()
@@ -637,6 +638,7 @@ def api_baseball():
         except Exception:
             last_scan = datetime.now(ZoneInfo("UTC")).isoformat()
 
+        quota = get_odds_quota()
         return jsonify({
             "games":          games_out,
             "positions":      live_positions,   # from Kalshi API (source of truth)
@@ -644,6 +646,8 @@ def api_baseball():
             "has_odds_key":   bool(os.getenv("ODDS_API_KEY")),
             "last_scan":      last_scan,
             "poll_interval":  config.POLL_INTERVAL_SECONDS,
+            "odds_remaining": quota.get("remaining"),
+            "odds_used":      quota.get("used"),
         })
     except Exception as e:
         return jsonify({"error": str(e), "games": [], "signals": []}), 500
