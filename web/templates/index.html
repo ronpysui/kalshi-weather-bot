@@ -989,9 +989,16 @@ async function loadBaseball(manual = false) {
               });
 
               // Either a live position OR a logged bet means bet already placed
-              const existingBet = livePos
-                ? { team: livePos.team, contracts: livePos.quantity, price_cents: livePos.avg_price }
-                : loggedBet;
+              // Always prefer livePos (correct names from ticker parsing)
+              // For loggedBet fallback: override team name from the position if available
+              let existingBet = null;
+              if (livePos) {
+                existingBet = { team: livePos.team, contracts: livePos.quantity, price_cents: livePos.avg_price };
+              } else if (loggedBet) {
+                // Find correct team name from positions by matching ticker
+                const matchPos = (data.positions || []).find(p => p.ticker === loggedBet.ticker);
+                existingBet = { ...loggedBet, team: matchPos ? matchPos.team : loggedBet.team };
+              }
 
               const autoBetRow = isLive
                 ? `<div style="margin-top:3px;padding:2px 5px;background:rgba(255,60,60,0.06);
