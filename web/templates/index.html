@@ -1553,12 +1553,21 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores, por
   // ── Current Positions ─────────────────────────────────────────────────────
   // Use LIVE Kalshi positions (source of truth), not bet log
   if (livePositions.length) {
+    // Sort: live games first, then by game time (soonest first)
+    const sortedPositions = [...livePositions].sort((a, b) => {
+      const aLive = a.commence && new Date(a.commence) <= new Date() ? 0 : 1;
+      const bLive = b.commence && new Date(b.commence) <= new Date() ? 0 : 1;
+      if (aLive !== bLive) return aLive - bLive;
+      const aTime = a.commence ? new Date(a.commence).getTime() : Infinity;
+      const bTime = b.commence ? new Date(b.commence).getTime() : Infinity;
+      return aTime - bTime;
+    });
     html += `
       <div class="panel-label" style="margin-bottom:6px">
-        OPEN POSITIONS &nbsp;<span class="bb-status bb-status-pending" style="vertical-align:middle">${livePositions.length}</span>
+        OPEN POSITIONS &nbsp;<span class="bb-status bb-status-pending" style="vertical-align:middle">${sortedPositions.length}</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">
-        ${livePositions.map((p, pi) => {
+        ${sortedPositions.map((p, pi) => {
             const sc = _scoreKey(mlbScores, p.away, p.home);
             const gameStarted = sc && (sc.inProgress || sc.done);
             const scoreStr = sc && sc.awayScore !== null
@@ -1606,7 +1615,7 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores, por
                 ${badge}
               </div>
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-                <span class="dim" style="font-size:9px">${p.away} @ ${p.home}</span>
+                <span class="dim" style="font-size:9px">${p.commence ? new Date(p.commence).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Chicago'}) + ' · ' : ''}${p.away} @ ${p.home}</span>
                 ${scoreLine}
               </div>
               <div style="display:flex;gap:8px;font-size:9px;align-items:center">
