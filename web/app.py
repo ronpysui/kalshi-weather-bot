@@ -645,8 +645,27 @@ def api_baseball():
                 # Fallback: parse team names from ticker
                 away, home, side = _parse_ticker_matchup(ticker)
                 team = _parse_ticker_team(ticker)
+                # Parse date+time from ticker: KXMLBGAME-26MAR312140NYYSEA-SEA
                 commence = None
                 mins = None
+                try:
+                    mid = ticker.split("-")[1]  # "26MAR312140NYYSEA"
+                    yr = int(mid[:2]) + 2000    # 2026
+                    mon_str = mid[2:5]           # "MAR"
+                    mon_map = {"JAN":1,"FEB":2,"MAR":3,"APR":4,"MAY":5,"JUN":6,
+                               "JUL":7,"AUG":8,"SEP":9,"OCT":10,"NOV":11,"DEC":12}
+                    mon = mon_map.get(mon_str, 1)
+                    day = int(mid[5:7])          # 31
+                    hhmm = mid[7:11]             # "2140"
+                    hr = int(hhmm[:2])           # 21
+                    mn = int(hhmm[2:])           # 40
+                    from datetime import datetime, timezone
+                    game_dt = datetime(yr, mon, day, hr, mn, tzinfo=timezone.utc)
+                    commence = game_dt.isoformat()
+                    import time
+                    mins = int((game_dt.timestamp() - time.time()) / 60)
+                except Exception:
+                    pass
 
             live_positions.append({
                 "ticker":    ticker,
