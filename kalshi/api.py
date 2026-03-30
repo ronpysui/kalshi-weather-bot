@@ -298,6 +298,14 @@ def place_baseball_order(ticker: str, side: str, contracts: int,
         print(f"[DRY RUN] Baseball order: BUY {contracts}x YES on {ticker} @ {price_cents}¢")
         return {"status": "dry_run", "order": {"order_id": "dry-run"}}
 
+    # Validate inputs
+    price_cents = int(price_cents)
+    contracts = int(contracts)
+    if price_cents < 1 or price_cents > 99:
+        raise ValueError(f"Invalid price: {price_cents}¢ (must be 1-99)")
+    if contracts < 1:
+        raise ValueError(f"Invalid contracts: {contracts} (must be >= 1)")
+
     body = {
         "ticker":     ticker,
         "action":     "buy",
@@ -306,7 +314,14 @@ def place_baseball_order(ticker: str, side: str, contracts: int,
         "count":      contracts,
         "yes_price":  price_cents,
     }
-    return _post("/portfolio/orders", body)
+    print(f"[baseball] Placing order: {body}")
+    try:
+        result = _post("/portfolio/orders", body)
+        print(f"[baseball] Order placed OK: {result.get('order', {}).get('order_id', '?')}")
+        return result
+    except Exception as e:
+        print(f"[baseball] Order FAILED for {ticker}: {e}")
+        raise
 
 
 # ── Historical (backtest) ─────────────────────────────────────────────────────
