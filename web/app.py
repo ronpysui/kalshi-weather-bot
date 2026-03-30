@@ -478,12 +478,39 @@ def api_baseball():
                 "away_position": away_pos,
             })
 
+        # Build a lookup: for each position ticker, parse home/away team names
+        # so we can attach positions to unmatched game cards
+        def _match_pos_to_game(game_home, game_away, positions_dict):
+            """Find positions matching a game by team name (last word match)."""
+            home_pos = away_pos = None
+            home_tk = away_tk = ""
+            home_last = game_home.split()[-1].lower() if game_home else ""
+            away_last = game_away.split()[-1].lower() if game_away else ""
+            for tk, pos in positions_dict.items():
+                if pos.get("quantity", 0) <= 0:
+                    continue
+                parts = tk.split("-")
+                if len(parts) < 3:
+                    continue
+                team_abbr = parts[-1]
+                team_full = _MLB_ABBR.get(team_abbr, "").lower()
+                team_last = team_full.split()[-1] if team_full else ""
+                if team_last == home_last:
+                    home_pos = pos
+                    home_tk = tk
+                elif team_last == away_last:
+                    away_pos = pos
+                    away_tk = tk
+            return home_pos, away_pos, home_tk, away_tk
+
         # Add unmatched Odds API games (no Kalshi market yet) so dashboard isn't blank
         matched_ids = {g["id"] for g in matched}
         for g in sorted(odds_games, key=lambda x: x["commence"]):
             if g["id"] in matched_ids:
                 continue  # already in games_out from matched
             mins = minutes_to_first_pitch(g["commence"])
+            # Try to find positions for this game even without Kalshi market match
+            h_pos, a_pos, h_tk, a_tk = _match_pos_to_game(g["home"], g["away"], positions)
             games_out.append({
                 "id":           g["id"],
                 "home":         g["home"],
@@ -497,12 +524,12 @@ def api_baseball():
                 "home_edge":    0,
                 "away_edge":    0,
                 "num_books":    g.get("num_books", 0),
-                "home_ticker":  "",
-                "away_ticker":  "",
+                "home_ticker":  h_tk,
+                "away_ticker":  a_tk,
                 "home_signal":  None,
                 "away_signal":  None,
-                "home_position": None,
-                "away_position": None,
+                "home_position": h_pos,
+                "away_position": a_pos,
                 "no_kalshi":    True,  # flag for frontend
             })
 
