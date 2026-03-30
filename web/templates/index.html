@@ -656,26 +656,21 @@ function _bbStartNextGameCountdown(minsToGame) {
   _bbTickNextGame(); // immediate first render
 }
 
-// ── Bot scan countdown (ticks every second) ──────────────────────────────────
+// ── Dashboard refresh countdown (ticks every second) ─────────────────────────
 let _scanTimer = null;
+let _refreshCountdown = 60;
 function _bbStartScanCountdown() {
   if (_scanTimer) clearInterval(_scanTimer);
-  _scanTimer = setInterval(_bbTickScan, 1000);
+  _refreshCountdown = 60; // reset on each data load
+  _scanTimer = setInterval(_bbTickRefresh, 1000);
 }
-function _bbTickScan() {
-  const el = document.getElementById('bb-scan-cd');
-  if (!el || !window._bbLastScan) return;
-  const lastMs = new Date(window._bbLastScan).getTime();
-  const nextMs = lastMs + (window._bbPollInterval || 1800) * 1000;
-  const secsLeft = Math.max(0, Math.floor((nextMs - Date.now()) / 1000));
-  if (secsLeft <= 0) {
-    el.textContent = 'scanning...';
-    el.style.color = 'var(--green)';
-  } else {
-    const m = Math.floor(secsLeft / 60);
-    const s = secsLeft % 60;
-    el.textContent = `${m}m ${String(s).padStart(2, '0')}s`;
-  }
+function _bbTickRefresh() {
+  const el = document.getElementById('bb-refresh-cd');
+  if (!el) return;
+  _refreshCountdown = Math.max(0, _refreshCountdown - 1);
+  el.textContent = String(_refreshCountdown);
+  if (_refreshCountdown <= 0) el.style.color = 'var(--green)';
+  else el.style.color = 'var(--cyan)';
 }
 
 function _bbTickNextGame() {
@@ -1164,32 +1159,33 @@ async function loadBaseball(manual = false) {
         return s;
       };
 
-      // Bot scan countdown
-      const lastScan     = data.last_scan;
-      const pollInterval = data.poll_interval || 600; // seconds (default 10 min)
-      let scanCountdown  = '';
-      if (lastScan) {
-        const lastMs = new Date(lastScan).getTime();
-        const nextMs = lastMs + pollInterval * 1000;
-        const nowMs  = Date.now();
-        const secsLeft = Math.max(0, Math.floor((nextMs - nowMs) / 1000));
-        const m = Math.floor(secsLeft / 60);
-        const s = secsLeft % 60;
-        scanCountdown = secsLeft > 0
-          ? `next scan in <b id="bb-scan-cd" style="color:var(--cyan)">${m}m ${String(s).padStart(2,'0')}s</b>`
-          : `<span style="color:var(--green)">scanning now...</span>`;
+      // Data freshness + refresh countdown
+      const refreshInterval = 60; // dashboard refreshes every 60s
+      let refreshLabel = '';
+      if (data.last_scan) {
+        const lastMs = new Date(data.last_scan).getTime();
+        const agoSecs = Math.floor((Date.now() - lastMs) / 1000);
+        if (agoSecs < 5) {
+          refreshLabel = `<span style="color:var(--green)">● live</span>`;
+        } else if (agoSecs < 120) {
+          refreshLabel = `<span style="color:var(--cyan)">updated ${agoSecs}s ago</span>`;
+        } else {
+          const m = Math.floor(agoSecs / 60);
+          refreshLabel = `<span style="color:var(--yellow)">updated ${m}m ago</span>`;
+        }
       } else {
-        scanCountdown = `<span class="dim">bot not yet started</span>`;
+        refreshLabel = `<span class="dim">loading...</span>`;
       }
-      // Store for live tick
-      window._bbLastScan = lastScan;
-      window._bbPollInterval = pollInterval;
+
+      // Auto-bet status
+      const botInterval = data.poll_interval || 1800; // worker scans every 30 min
+      let botLabel = `auto-bets every ${Math.round(botInterval / 60)}min`;
 
       const scanNote = `<div style="margin-bottom:8px;padding:5px 10px;background:rgba(0,212,255,0.04);
                                      border:1px solid rgba(0,212,255,0.1);border-radius:4px;
                                      display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:10px;color:var(--text-dim)">🤖 ${scanCountdown} · locks out 30min before pitch</span>
-        <span style="font-size:9px;color:var(--text-dim)">refreshes every 60s</span>
+        <span style="font-size:10px;color:var(--text-dim)">🤖 ${refreshLabel} · ${botLabel} · locks out 30min before pitch</span>
+        <span style="font-size:9px;color:var(--text-dim)">refresh <span id="bb-refresh-cd" style="color:var(--cyan)">60</span>s</span>
       </div>`;
 
       mainHtml += scanNote;
@@ -1321,7 +1317,7 @@ async function loadBaseball(manual = false) {
 
     // Start countdowns AFTER DOM is updated so elements exist
     if (upcoming && upcoming.length) _bbStartNextGameCountdown(upcoming[0].mins_to_game);
-    if (data.last_scan) _bbStartScanCountdown();
+    _bbStartScanCountdown(); // always start refresh countdown
     // Start fast score refresh if any live games visible
     if (data.games && data.games.some(g => g.mins_to_game <= 0)) _startLiveScoreTimer();
     _bbStartCountdown();
