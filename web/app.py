@@ -478,6 +478,25 @@ def api_baseball():
                 "away_position": away_pos,
             })
 
+        # MLB team abbreviation → full name mapping (used by position matching + sync)
+        _MLB_ABBR = {
+            "ARI": "Arizona Diamondbacks", "ATL": "Atlanta Braves",
+            "BAL": "Baltimore Orioles", "BOS": "Boston Red Sox",
+            "CHC": "Chicago Cubs", "CWS": "Chicago White Sox", "CHW": "Chicago White Sox",
+            "CIN": "Cincinnati Reds", "CLE": "Cleveland Guardians",
+            "COL": "Colorado Rockies", "DET": "Detroit Tigers",
+            "HOU": "Houston Astros", "KC": "Kansas City Royals", "KCR": "Kansas City Royals",
+            "LAA": "Los Angeles Angels", "LAD": "Los Angeles Dodgers",
+            "MIA": "Miami Marlins", "MIL": "Milwaukee Brewers",
+            "MIN": "Minnesota Twins", "NYM": "New York Mets", "NYY": "New York Yankees",
+            "OAK": "Oakland Athletics", "PHI": "Philadelphia Phillies",
+            "PIT": "Pittsburgh Pirates", "SD": "San Diego Padres", "SDP": "San Diego Padres",
+            "SEA": "Seattle Mariners", "SF": "San Francisco Giants", "SFG": "San Francisco Giants",
+            "STL": "St. Louis Cardinals", "TB": "Tampa Bay Rays", "TBR": "Tampa Bay Rays",
+            "TEX": "Texas Rangers", "TOR": "Toronto Blue Jays",
+            "WAS": "Washington Nationals", "WSH": "Washington Nationals", "WSN": "Washington Nationals",
+        }
+
         # Build a lookup: for each position ticker, parse home/away team names
         # so we can attach positions to unmatched game cards
         def _match_pos_to_game(game_home, game_away, positions_dict):
@@ -532,25 +551,6 @@ def api_baseball():
                 "away_position": a_pos,
                 "no_kalshi":    True,  # flag for frontend
             })
-
-        # MLB team abbreviation → full name mapping (used by sync + positions)
-        _MLB_ABBR = {
-            "ARI": "Arizona Diamondbacks", "ATL": "Atlanta Braves",
-            "BAL": "Baltimore Orioles", "BOS": "Boston Red Sox",
-            "CHC": "Chicago Cubs", "CWS": "Chicago White Sox", "CHW": "Chicago White Sox",
-            "CIN": "Cincinnati Reds", "CLE": "Cleveland Guardians",
-            "COL": "Colorado Rockies", "DET": "Detroit Tigers",
-            "HOU": "Houston Astros", "KC": "Kansas City Royals", "KCR": "Kansas City Royals",
-            "LAA": "Los Angeles Angels", "LAD": "Los Angeles Dodgers",
-            "MIA": "Miami Marlins", "MIL": "Milwaukee Brewers",
-            "MIN": "Minnesota Twins", "NYM": "New York Mets", "NYY": "New York Yankees",
-            "OAK": "Oakland Athletics", "PHI": "Philadelphia Phillies",
-            "PIT": "Pittsburgh Pirates", "SD": "San Diego Padres", "SDP": "San Diego Padres",
-            "SEA": "Seattle Mariners", "SF": "San Francisco Giants", "SFG": "San Francisco Giants",
-            "STL": "St. Louis Cardinals", "TB": "Tampa Bay Rays", "TBR": "Tampa Bay Rays",
-            "TEX": "Texas Rangers", "TOR": "Toronto Blue Jays",
-            "WAS": "Washington Nationals", "WSH": "Washington Nationals", "WSN": "Washington Nationals",
-        }
 
         def _parse_ticker_team(ticker):
             """Extract team name from Kalshi ticker like KXMLBGAME-26MAR312140NYYSEA-SEA"""
