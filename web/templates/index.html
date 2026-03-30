@@ -919,7 +919,8 @@ async function loadBaseball(manual = false) {
               const awayEdgeVal = g.away_edge || 0;
               const bestEdge    = Math.max(homeEdgeVal, awayEdgeVal);
               const isLive      = g.mins_to_game <= 0;
-              const hasEdge     = bestEdge >= MIN_EDGE_DISPLAY && !isLive;
+              const noKalshi    = g.no_kalshi || false;
+              const hasEdge     = bestEdge >= MIN_EDGE_DISPLAY && !isLive && !noKalshi;
               const hs   = g.home_signal;
               const as_  = g.away_signal;
               const bestSig = hs && as_ ? (hs.edge >= as_.edge ? hs : as_) : (hs || as_);
@@ -932,16 +933,17 @@ async function loadBaseball(manual = false) {
                                  : g.mins_to_game < 60? `🟡 ${g.mins_to_game}m · ${pitchDate} ${pitchTime} CST`
                                  :                      `${pitchDate} · ${pitchTime} CST`;
 
-              const cardOpacity  = (hasEdge || isLive) ? '1' : '0.5';
+              const cardOpacity  = (hasEdge || isLive) ? '1' : noKalshi ? '0.35' : '0.5';
               const borderStyle  = hasEdge ? 'border-color:rgba(0,255,136,0.5);box-shadow:0 0 12px rgba(0,255,136,0.08)'
                                  : isLive  ? 'border-color:rgba(255,60,60,0.3)'
                                  :           '';
               const homeEdgeClass = homeEdgeVal >= MIN_EDGE_DISPLAY ? 'green' : homeEdgeVal <= -MIN_EDGE_DISPLAY ? 'red' : 'dim';
               const awayEdgeClass = awayEdgeVal >= MIN_EDGE_DISPLAY ? 'green' : awayEdgeVal <= -MIN_EDGE_DISPLAY ? 'red' : 'dim';
 
-              const statusBadge = isLive  ? `<span style="font-size:10px;font-weight:700;color:var(--red)">● LIVE</span>`
-                                : hasEdge ? `<span style="font-size:10px;font-weight:700;color:var(--green)">● BET</span>`
-                                :           `<span style="font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:.05em">NO EDGE</span>`;
+              const statusBadge = isLive   ? `<span style="font-size:10px;font-weight:700;color:var(--red)">● LIVE</span>`
+                                : hasEdge  ? `<span style="font-size:10px;font-weight:700;color:var(--green)">● BET</span>`
+                                : noKalshi ? `<span style="font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:.05em">NO MARKET</span>`
+                                :            `<span style="font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:.05em">NO EDGE</span>`;
 
               // Bot window: 10AM–12AM ET
               const etHour = parseInt(new Date().toLocaleString('en-US', {timeZone: 'America/New_York', hour: 'numeric', hour12: false}), 10);

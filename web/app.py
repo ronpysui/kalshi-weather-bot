@@ -478,6 +478,34 @@ def api_baseball():
                 "away_position": away_pos,
             })
 
+        # Add unmatched Odds API games (no Kalshi market yet) so dashboard isn't blank
+        matched_ids = {g["id"] for g in matched}
+        for g in sorted(odds_games, key=lambda x: x["commence"]):
+            if g["id"] in matched_ids:
+                continue  # already in games_out from matched
+            mins = minutes_to_first_pitch(g["commence"])
+            games_out.append({
+                "id":           g["id"],
+                "home":         g["home"],
+                "away":         g["away"],
+                "commence":     g["commence"].isoformat(),
+                "mins_to_game": mins,
+                "home_prob":    round(g["home_prob"] * 100, 1),
+                "away_prob":    round(g["away_prob"] * 100, 1),
+                "home_kalshi":  0,
+                "away_kalshi":  0,
+                "home_edge":    0,
+                "away_edge":    0,
+                "num_books":    g.get("num_books", 0),
+                "home_ticker":  "",
+                "away_ticker":  "",
+                "home_signal":  None,
+                "away_signal":  None,
+                "home_position": None,
+                "away_position": None,
+                "no_kalshi":    True,  # flag for frontend
+            })
+
         # MLB team abbreviation → full name mapping (used by sync + positions)
         _MLB_ABBR = {
             "ARI": "Arizona Diamondbacks", "ATL": "Atlanta Braves",
