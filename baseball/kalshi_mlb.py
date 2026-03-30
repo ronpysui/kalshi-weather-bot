@@ -235,19 +235,56 @@ def get_mlb_events(series: str = None) -> list[dict]:
     return events
 
 
+def _parse_ticker_date(event_ticker: str) -> str | None:
+    """Extract date from Kalshi event ticker as 'YYYY-MM-DD' in US/Eastern.
+
+    Ticker format: KXMLBGAME-26MAR312140NYYSEA
+    → 26=2026, MAR=March, 31=day, 2140=time(ET)
+    Returns '2026-03-31' or None on failure.
+    """
+    try:
+        mid = event_ticker.split("-")[1]  # "26MAR312140NYYSEA"
+        yr = int(mid[:2]) + 2000
+        mon_str = mid[2:5]
+        mon_map = {"JAN":1,"FEB":2,"MAR":3,"APR":4,"MAY":5,"JUN":6,
+                   "JUL":7,"AUG":8,"SEP":9,"OCT":10,"NOV":11,"DEC":12}
+        mon = mon_map.get(mon_str)
+        if not mon:
+            return None
+        day = int(mid[5:7])
+        # Ticker time is ET local, so the date in the ticker IS the ET game date
+        return f"{yr}-{mon:02d}-{day:02d}"
+    except Exception:
+        return None
+
+
 def match_to_odds(kalshi_events: list[dict], odds_games: list[dict]) -> list[dict]:
     """
-    Match Kalshi events to Odds API games by team name fuzzy match.
+    Match Kalshi events to Odds API games by team name fuzzy match + date.
 
     Returns list of matched dicts with both Kalshi and Vegas data.
     """
+    from zoneinfo import ZoneInfo
+    ET = ZoneInfo("America/New_York")
     matched = []
 
     for game in odds_games:
+        # Get game date in ET (same timezone Kalshi tickers use)
+        game_dt = game["commence"]
+        if hasattr(game_dt, 'astimezone'):
+            game_date_et = game_dt.astimezone(ET).strftime("%Y-%m-%d")
+        else:
+            game_date_et = str(game_dt)[:10]
+
         best_match = None
         best_score = 0.0
 
         for ev in kalshi_events:
+            # Date must match (prevents cross-day false matches)
+            ev_date = _parse_ticker_date(ev.get("event_ticker", ""))
+            if ev_date and game_date_et and ev_date != game_date_et:
+                continue  # different day — skip
+
             # Score based on home+away team name similarity
             score = max(
                 _team_similarity(game["home"], ev["home"]) +
