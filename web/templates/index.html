@@ -1499,7 +1499,12 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores, por
 
   // Always prefer real Kalshi balance; fall back to tracked values
   const displayBalance  = liveBalance || s.current_bankroll || 100;
-  const displayPortfolio = portfolioVal || displayBalance;
+  // Portfolio = cash + position value. Use Kalshi's portfolio value if higher than cash
+  // (meaning it includes positions), otherwise compute from position costs
+  const positionCost = livePositions.reduce((sum, p) => sum + (p.cost || 0), 0);
+  const displayPortfolio = (portfolioVal && portfolioVal > displayBalance)
+    ? portfolioVal
+    : displayBalance + positionCost;
   // Starting: use stored starting_bankroll only if it's not the placeholder $100
   const storedStart     = s.starting_bankroll;
   const startingBalance = (storedStart && storedStart !== 100)
