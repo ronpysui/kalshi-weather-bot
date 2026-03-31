@@ -700,46 +700,43 @@ def api_baseball():
             import traceback; traceback.print_exc()
 
         # Build positions summary from live Kalshi data (source of truth)
+        # Always parse team names from ticker to avoid game-card mismatches
         live_positions = []
         for ticker, pos in positions.items():
             if pos.get("quantity", 0) <= 0:
                 continue
-            # Find which game this belongs to
-            game_info = next((go for go in games_out
-                              if go.get("home_ticker") == ticker or go.get("away_ticker") == ticker), None)
             avg_cents = int(round(pos.get("avg_price", 0)))
             qty = pos["quantity"]
 
+            # Always parse from ticker (source of truth for team names)
+            away, home, side = _parse_ticker_matchup(ticker)
+            team = _parse_ticker_team(ticker)
+
+            # Try to get commence/mins from matching game
+            game_info = next((go for go in games_out
+                              if go.get("home_ticker") == ticker or go.get("away_ticker") == ticker), None)
             if game_info:
-                home = game_info["home"]
-                away = game_info["away"]
-                team = home if game_info.get("home_ticker") == ticker else away
-                side = "home" if game_info.get("home_ticker") == ticker else "away"
                 commence = game_info.get("commence")
                 mins = game_info.get("mins_to_game")
             else:
-                # Fallback: parse team names from ticker
-                away, home, side = _parse_ticker_matchup(ticker)
-                team = _parse_ticker_team(ticker)
                 # Parse date+time from ticker: KXMLBGAME-26MAR312140NYYSEA-SEA
                 commence = None
                 mins = None
                 try:
-                    mid = ticker.split("-")[1]  # "26MAR312140NYYSEA"
-                    yr = int(mid[:2]) + 2000    # 2026
-                    mon_str = mid[2:5]           # "MAR"
+                    mid = ticker.split("-")[1]
+                    yr = int(mid[:2]) + 2000
+                    mon_str = mid[2:5]
                     mon_map = {"JAN":1,"FEB":2,"MAR":3,"APR":4,"MAY":5,"JUN":6,
                                "JUL":7,"AUG":8,"SEP":9,"OCT":10,"NOV":11,"DEC":12}
                     mon = mon_map.get(mon_str, 1)
-                    day = int(mid[5:7])          # 31
-                    hhmm = mid[7:11]             # "2140"
-                    hr = int(hhmm[:2])           # 21
-                    mn = int(hhmm[2:])           # 40
+                    day = int(mid[5:7])
+                    hhmm = mid[7:11]
+                    hr, mn = int(hhmm[:2]), int(hhmm[2:])
                     from datetime import datetime, timezone
                     game_dt = datetime(yr, mon, day, hr, mn, tzinfo=timezone.utc)
                     commence = game_dt.isoformat()
-                    import time
-                    mins = int((game_dt.timestamp() - time.time()) / 60)
+                    import time as _time
+                    mins = int((game_dt.timestamp() - _time.time()) / 60)
                 except Exception:
                     pass
 
