@@ -1200,9 +1200,13 @@ async function loadBaseball(manual = false) {
         </div>
       </div>`;
 
-      // Show all upcoming games in one section (no today/tomorrow split)
-      const allGames = data.games.sort((a, b) => a.mins_to_game - b.mins_to_game);
-      mainHtml += renderSection(allGames, 'GAMES', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'America/Chicago'}));
+      // Show only today's games (filter out tomorrow's)
+      const allGames = data.games.filter(g => {
+        if (g.mins_to_game <= 0) return true; // live/finished = today
+        const d = new Date(g.commence).toLocaleDateString('en-CA', {timeZone: TZ});
+        return d === cstNow;
+      }).sort((a, b) => a.mins_to_game - b.mins_to_game);
+      mainHtml += renderSection(allGames, 'TODAY', new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'America/Chicago'}));
 
       // ── RESULTS: completed games (today + yesterday) ──────────────────────
       const completedGames = Object.values(mlbScores).filter(sc => sc.done && sc.awayScore !== null);
