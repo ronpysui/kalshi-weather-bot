@@ -208,7 +208,7 @@ def get_mlb_events(series: str = None) -> list[dict]:
         away_ask = _ask(away_mkt)
         home_ask = _ask(home_mkt)
 
-        # Commence time from close_time
+        # Commence time from close_time (trading closes at/near game start)
         commence = None
         ct = away_mkt.get("close_time") or home_mkt.get("close_time")
         if ct:
@@ -216,6 +216,9 @@ def get_mlb_events(series: str = None) -> list[dict]:
                 commence = datetime.fromisoformat(ct.replace("Z", "+00:00"))
             except Exception:
                 pass
+        print(f"[kalshi_mlb] Event {event_ticker}: close_time={ct}, "
+              f"home={home_name}, away={away_name}, "
+              f"commence={commence}")
 
         events.append({
             "event_ticker": event_ticker,
@@ -281,7 +284,12 @@ def match_to_odds(kalshi_events: list[dict], odds_games: list[dict]) -> list[dic
 
         for ev in kalshi_events:
             # Date must match (prevents cross-day false matches)
-            ev_date = _parse_ticker_date(ev.get("event_ticker", ""))
+            # Prefer commence (from close_time = actual game time) over ticker date
+            ev_commence = ev.get("commence")
+            if ev_commence and hasattr(ev_commence, 'astimezone'):
+                ev_date = ev_commence.astimezone(ET).strftime("%Y-%m-%d")
+            else:
+                ev_date = _parse_ticker_date(ev.get("event_ticker", ""))
             if ev_date and game_date_et and ev_date != game_date_et:
                 continue  # different day — skip
 
