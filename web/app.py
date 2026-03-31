@@ -796,14 +796,13 @@ def api_baseball():
                 "mins_to_game": mins,
             })
 
-        # Last bot scan timestamp — always update on each API call since we're
-        # fetching fresh data anyway. The worker also updates this independently.
+        # Last bot scan timestamp — read only, don't reset it.
+        # Only the worker (main.py) should update this when it actually scans.
         try:
-            from main import get_last_scan_time, _record_scan_time
-            _record_scan_time()  # always update — web server is scanning too
+            from main import get_last_scan_time
             last_scan = get_last_scan_time()
         except Exception:
-            last_scan = datetime.now(ZoneInfo("UTC")).isoformat()
+            last_scan = None
 
         quota = get_odds_quota()
         return jsonify({
