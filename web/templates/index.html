@@ -1555,8 +1555,8 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores, por
   const resolvedForCal = bets.filter(b => b.status === 'won' || b.status === 'lost');
   const dailyPnl = {};
   for (const b of resolvedForCal) {
-    // Use game date from ticker (most accurate), fall back to game_date field, then resolved_at
-    const d = _parseGameDateFromTicker(b.ticker || '') || b.game_date || (b.resolved_at || '').slice(0, 10);
+    // Use game_date field (from Kalshi market API, most accurate), fall back to ticker parse, then resolved_at
+    const d = b.game_date || _parseGameDateFromTicker(b.ticker || '') || (b.resolved_at || '').slice(0, 10);
     if (!d) continue;
     // Skip future game dates (shouldn't be resolved yet)
     if (d > todayStr) continue;
