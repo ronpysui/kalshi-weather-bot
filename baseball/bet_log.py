@@ -68,6 +68,23 @@ def _save(bets: list[dict]) -> None:
 
 # ── MLB Stats API outcome resolution ─────────────────────────────────────────
 
+def _parse_game_date_from_ticker(ticker: str) -> str | None:
+    """Extract game date (YYYY-MM-DD) from ticker like KXMLBGAME-26MAR312140NYYSEA-SEA."""
+    try:
+        mid = ticker.split("-")[1]  # "26MAR312140NYYSEA"
+        yr = int(mid[:2]) + 2000
+        mon_str = mid[2:5]
+        mon_map = {"JAN":1,"FEB":2,"MAR":3,"APR":4,"MAY":5,"JUN":6,
+                   "JUL":7,"AUG":8,"SEP":9,"OCT":10,"NOV":11,"DEC":12}
+        mon = mon_map.get(mon_str)
+        if not mon:
+            return None
+        day = int(mid[5:7])
+        return f"{yr}-{mon:02d}-{day:02d}"
+    except Exception:
+        return None
+
+
 def _resolve_via_mlb_stats(bet: dict) -> bool:
     """
     Check the MLB Stats API for the game result.
@@ -78,13 +95,22 @@ def _resolve_via_mlb_stats(bet: dict) -> bool:
     try:
         import urllib.request
 
-        # Determine the game date
-        game_date = bet.get("game_date")
+        # Determine the game date — prefer ticker-derived date (most accurate)
+        game_date = None
+        ticker = bet.get("ticker", "")
+        if ticker:
+            game_date = _parse_game_date_from_ticker(ticker)
         if not game_date:
-            # Fall back to date from timestamp
+            game_date = bet.get("game_date")
+        if not game_date:
             ts = bet.get("timestamp", "")
             game_date = ts[:10] if ts else None
         if not game_date:
+            return False
+
+        # Don't try to resolve future games
+        from datetime import date
+        if game_date > date.today().isoformat():
             return False
 
         url = (
