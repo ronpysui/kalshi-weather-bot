@@ -670,6 +670,27 @@ def api_baseball():
             except Exception as e3:
                 print(f"[sync] Step 3 fix names error: {e3}")
 
+            # 4. Reset wrongly-resolved future bets back to pending
+            try:
+                from baseball.bet_log import _parse_game_date_from_ticker
+                today_str = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+                for b in existing_bets:
+                    if b.get("status") not in ("won", "lost"):
+                        continue
+                    t = b.get("ticker", "")
+                    if not t:
+                        continue
+                    gd = _parse_game_date_from_ticker(t)
+                    if gd and gd > today_str:
+                        print(f"[sync] Resetting wrongly-resolved future bet: {t} (game {gd}, resolved as {b['status']})")
+                        b["status"] = "pending"
+                        b["result"] = "pending"
+                        b["pnl"] = None
+                        b["resolved_at"] = None
+                        dirty = True
+            except Exception as e4:
+                print(f"[sync] Step 4 reset future bets error: {e4}")
+
             if dirty:
                 _save_bets(existing_bets)
                 # Reload so subsequent code sees fixed data
