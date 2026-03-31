@@ -270,6 +270,7 @@ def match_to_odds(kalshi_events: list[dict], odds_games: list[dict]) -> list[dic
     from zoneinfo import ZoneInfo
     ET = ZoneInfo("America/New_York")
     matched = []
+    print(f"[match_to_odds] {len(odds_games)} odds games, {len(kalshi_events)} kalshi events")
 
     for game in odds_games:
         # Get game date in ET (same timezone Kalshi tickers use)
@@ -284,13 +285,11 @@ def match_to_odds(kalshi_events: list[dict], odds_games: list[dict]) -> list[dic
 
         for ev in kalshi_events:
             # Date must match (prevents cross-day false matches)
-            # Prefer commence (from close_time = actual game time) over ticker date
-            ev_commence = ev.get("commence")
-            if ev_commence and hasattr(ev_commence, 'astimezone'):
-                ev_date = ev_commence.astimezone(ET).strftime("%Y-%m-%d")
-            else:
-                ev_date = _parse_ticker_date(ev.get("event_ticker", ""))
+            # Use ticker date (market creation = game date in ET)
+            ev_date = _parse_ticker_date(ev.get("event_ticker", ""))
             if ev_date and game_date_et and ev_date != game_date_et:
+                print(f"[match_to_odds] Date mismatch: {game['home']} vs {game['away']} "
+                      f"game={game_date_et} ticker={ev_date} ({ev.get('event_ticker','')})")
                 continue  # different day — skip
 
             # Score based on home+away team name similarity
@@ -310,5 +309,9 @@ def match_to_odds(kalshi_events: list[dict], odds_games: list[dict]) -> list[dic
                 "kalshi":       best_match,
                 "match_score":  round(best_score, 2),
             })
+        else:
+            print(f"[match_to_odds] NO MATCH: {game['away']} @ {game['home']} "
+                  f"date={game_date_et} best_score={best_score:.2f}")
 
+    print(f"[match_to_odds] Result: {len(matched)} matched out of {len(odds_games)} games")
     return matched
