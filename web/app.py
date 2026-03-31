@@ -772,6 +772,8 @@ def api_baseball():
             "has_odds_key":   bool(os.getenv("ODDS_API_KEY")),
             "last_scan":      last_scan,
             "poll_interval":  config.POLL_INTERVAL_SECONDS,
+            "scan_start_et":  config.BASEBALL_SCAN_START_ET,
+            "scan_end_et":    config.BASEBALL_SCAN_END_ET,
             "odds_remaining": quota.get("remaining"),
             "odds_used":      quota.get("used"),
         })

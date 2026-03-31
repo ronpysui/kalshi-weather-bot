@@ -656,21 +656,37 @@ function _bbStartNextGameCountdown(minsToGame) {
   _bbTickNextGame(); // immediate first render
 }
 
-// ── Dashboard refresh countdown (ticks every second) ─────────────────────────
+// ── Bot scan countdown + progress bar (ticks every second) ───────────────────
 let _scanTimer = null;
-let _refreshCountdown = 60;
 function _bbStartScanCountdown() {
   if (_scanTimer) clearInterval(_scanTimer);
-  _refreshCountdown = 60; // reset on each data load
-  _scanTimer = setInterval(_bbTickRefresh, 1000);
+  _scanTimer = setInterval(_bbTickScanBar, 1000);
 }
-function _bbTickRefresh() {
-  const el = document.getElementById('bb-refresh-cd');
-  if (!el) return;
-  _refreshCountdown = Math.max(0, _refreshCountdown - 1);
-  el.textContent = String(_refreshCountdown);
-  if (_refreshCountdown <= 0) el.style.color = 'var(--green)';
-  else el.style.color = 'var(--cyan)';
+function _bbTickScanBar() {
+  const statusEl = document.getElementById('bb-scan-status');
+  const barEl = document.getElementById('bb-scan-bar');
+  if (!statusEl || !window._bbLastScan || !window._bbBotInterval) return;
+
+  const lastMs = new Date(window._bbLastScan).getTime();
+  const elapsed = (Date.now() - lastMs) / 1000;
+  const interval = window._bbBotInterval;
+  const secsLeft = Math.max(0, interval - elapsed);
+  const pct = Math.min(100, (elapsed / interval) * 100);
+
+  const m = Math.floor(secsLeft / 60);
+  const s = Math.floor(secsLeft % 60);
+  const barColor = secsLeft < 60 ? 'var(--green)' : 'var(--cyan)';
+
+  if (secsLeft <= 5) {
+    statusEl.innerHTML = '<span style="color:var(--green)">● scanning now...</span>';
+  } else {
+    statusEl.innerHTML = `<span style="color:${barColor}">next scan in <b>${m}m ${String(s).padStart(2,'0')}s</b></span>`;
+  }
+
+  if (barEl) {
+    barEl.style.width = pct + '%';
+    barEl.style.background = barColor;
+  }
 }
 
 function _bbTickNextGame() {
@@ -1161,34 +1177,77 @@ async function loadBaseball(manual = false) {
         return s;
       };
 
-      // Data freshness + refresh countdown
-      const refreshInterval = 60; // dashboard refreshes every 60s
-      let refreshLabel = '';
-      if (data.last_scan) {
-        const lastMs = new Date(data.last_scan).getTime();
-        const agoSecs = Math.floor((Date.now() - lastMs) / 1000);
-        if (agoSecs < 5) {
-          refreshLabel = `<span style="color:var(--green)">● live</span>`;
-        } else if (agoSecs < 120) {
-          refreshLabel = `<span style="color:var(--cyan)">updated ${agoSecs}s ago</span>`;
-        } else {
-          const m = Math.floor(agoSecs / 60);
-          refreshLabel = `<span style="color:var(--yellow)">updated ${m}m ago</span>`;
-        }
+      // Bot scan progress bar
+      const botInterval = data.poll_interval || 1800;
+      const scanStartET = data.scan_start_et || 10;
+      const scanEndET   = data.scan_end_et || 24;
+      const botMins = Math.round(botInterval / 60);
+
+      // Check if we're in the betting window (ET timezone)
+      const nowET = new Date().toLocaleString('en-US', {timeZone: 'America/New_York'});
+      const hourET = new Date(nowET).getHours();
+      const inWindow = hourET >= scanStartET && (scanEndET >= 24 || hourET < scanEndET);
+
+      // Store for live tick
+      window._bbBotInterval = botInterval;
+      window._bbLastScan = data.last_scan;
+      window._bbScanStartET = scanStartET;
+      window._bbScanEndET = scanEndET;
+
+      let scanBarHtml = '';
+      if (!inWindow) {
+        // Outside betting window — show when it resumes
+        let resumeH = scanStartET;
+        let hoursUntil = resumeH - hourET;
+        if (hoursUntil <= 0) hoursUntil += 24;
+        const rH = Math.floor(hoursUntil);
+        const rM = Math.round((hoursUntil - rH) * 60);
+        scanBarHtml = `
+        <div style="margin-bottom:8px;padding:6px 10px;background:rgba(255,200,0,0.04);
+                     border:1px solid rgba(255,200,0,0.15);border-radius:4px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:10px;color:var(--yellow)">😴 Betting paused · outside scan window</span>
+            <span style="font-size:9px;color:var(--text-dim)">${scanStartET > 12 ? (scanStartET-12)+'PM' : scanStartET+'AM'} – ${scanEndET >= 24 ? '12AM' : scanEndET > 12 ? (scanEndET-12)+'PM' : scanEndET+'AM'} ET</span>
+          </div>
+          <div style="font-size:10px;color:var(--text-dim)">
+            Resuming in <span style="color:var(--yellow);font-weight:600">${rH}h ${rM}m</span>
+          </div>
+        </div>`;
       } else {
-        refreshLabel = `<span class="dim">loading...</span>`;
+        // In window — show progress bar to next scan
+        let secsLeft = 0, pct = 100;
+        if (data.last_scan) {
+          const lastMs = new Date(data.last_scan).getTime();
+          const elapsed = (Date.now() - lastMs) / 1000;
+          secsLeft = Math.max(0, botInterval - elapsed);
+          pct = Math.min(100, (elapsed / botInterval) * 100);
+        }
+        const m = Math.floor(secsLeft / 60);
+        const s = Math.floor(secsLeft % 60);
+        const barColor = secsLeft < 60 ? 'var(--green)' : 'var(--cyan)';
+        const statusText = secsLeft <= 5 ? '● scanning now...'
+          : `next scan in <b>${m}m ${String(s).padStart(2,'0')}s</b>`;
+
+        scanBarHtml = `
+        <div style="margin-bottom:8px;padding:6px 10px;background:rgba(0,212,255,0.04);
+                     border:1px solid rgba(0,212,255,0.1);border-radius:4px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:10px;color:var(--text-dim)">
+              🤖 <span id="bb-scan-status" style="color:${barColor}">${statusText}</span>
+              <span class="dim"> · every ${botMins}min · locks out 30min before pitch</span>
+            </span>
+            <span style="font-size:9px;color:var(--text-dim)">
+              ${scanStartET > 12 ? (scanStartET-12)+'PM' : scanStartET+'AM'}–${scanEndET >= 24 ? '12AM' : scanEndET > 12 ? (scanEndET-12)+'PM' : scanEndET+'AM'} ET
+            </span>
+          </div>
+          <div style="height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden">
+            <div id="bb-scan-bar" style="height:100%;width:${pct}%;background:${barColor};
+                 border-radius:2px;transition:width 1s linear"></div>
+          </div>
+        </div>`;
       }
 
-      // Auto-bet status
-      const botInterval = data.poll_interval || 1800; // worker scans every 30 min
-      let botLabel = `auto-bets every ${Math.round(botInterval / 60)}min`;
-
-      const scanNote = `<div style="margin-bottom:8px;padding:5px 10px;background:rgba(0,212,255,0.04);
-                                     border:1px solid rgba(0,212,255,0.1);border-radius:4px;
-                                     display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:10px;color:var(--text-dim)">🤖 ${refreshLabel} · ${botLabel} · locks out 30min before pitch</span>
-        <span style="font-size:9px;color:var(--text-dim)">refresh <span id="bb-refresh-cd" style="color:var(--cyan)">60</span>s</span>
-      </div>`;
+      const scanNote = scanBarHtml;
 
       mainHtml += scanNote;
       mainHtml += nextBannerHtml;
