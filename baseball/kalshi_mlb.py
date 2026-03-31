@@ -41,33 +41,54 @@ MLB_SERIES_CANDIDATES = [
 
 def get_open_mlb_markets(series: str = None) -> list[dict]:
     """
-    Return today's open Kalshi MLB individual game markets.
-    Tries known MLB win series tickers first, then falls back to broad search.
+    Return tradeable Kalshi MLB individual game markets.
+    Fetches both 'open' and 'active' statuses to catch today's games
+    (markets switch to 'active' once games are underway).
     """
-    # Try known series tickers first
-    for s in MLB_SERIES_CANDIDATES:
-        try:
-            data = _get("/markets", {"series_ticker": s, "status": "open", "limit": 50})
-            markets = data.get("markets", [])
-            if markets:
-                print(f"[kalshi_mlb] Found MLB game markets under series: {s}")
-                return markets
-        except Exception:
-            continue
+    all_markets = []
 
-    # Fallback: broad date-range search filtered to MLB game markets
+    # Try known series tickers with both statuses
+    for s in MLB_SERIES_CANDIDATES:
+        found = False
+        for status in ["open", "active"]:
+            cursor = None
+            while True:
+                params = {"series_ticker": s, "status": status, "limit": 200}
+                if cursor:
+                    params["cursor"] = cursor
+                try:
+                    data = _get("/markets", params)
+                except Exception:
+                    break
+                markets = data.get("markets", [])
+                if markets:
+                    found = True
+                    all_markets.extend(markets)
+                cursor = data.get("cursor")
+                if not cursor or len(markets) < 200:
+                    break
+        if found:
+            print(f"[kalshi_mlb] Found {len(all_markets)} MLB game markets under series: {s}")
+            # Deduplicate by ticker
+            seen = set()
+            deduped = []
+            for m in all_markets:
+                if m["ticker"] not in seen:
+                    seen.add(m["ticker"])
+                    deduped.append(m)
+            return deduped
+
+    # Fallback: broad date-range search
     from datetime import date, timedelta
     today    = date.today()
-    tomorrow = today + timedelta(days=1)
+    tomorrow = today + timedelta(days=2)  # wider window
 
-    all_markets = []
     cursor = None
     while True:
         params = {
-            "status":       "open",
             "limit":        200,
-            "min_close_ts": int(datetime(today.year, today.month, today.day, 10, 0, 0, tzinfo=timezone.utc).timestamp()),
-            "max_close_ts": int(datetime(tomorrow.year, tomorrow.month, tomorrow.day, 8, 0, 0, tzinfo=timezone.utc).timestamp()),
+            "min_close_ts": int(datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=timezone.utc).timestamp()),
+            "max_close_ts": int(datetime(tomorrow.year, tomorrow.month, tomorrow.day, 23, 59, 59, tzinfo=timezone.utc).timestamp()),
         }
         if cursor:
             params["cursor"] = cursor
@@ -208,17 +229,45 @@ def get_mlb_events(series: str = None) -> list[dict]:
         away_ask = _ask(away_mkt)
         home_ask = _ask(home_mkt)
 
-        # Commence time from close_time (trading closes at/near game start)
+        # Commence time from rules_primary (has exact game date+time)
+        # e.g. "...originally scheduled for Apr 2, 2026 at 9:40 PM EDT"
         commence = None
-        ct = away_mkt.get("close_time") or home_mkt.get("close_time")
-        if ct:
+        rules = away_mkt.get("rules_primary", "") or home_mkt.get("rules_primary", "")
+        import re as _re
+        rm = _re.search(
+            r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),\s*(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*(EDT|EST|ET|CDT|CST)',
+            rules, _re.IGNORECASE
+        )
+        if rm:
             try:
-                commence = datetime.fromisoformat(ct.replace("Z", "+00:00"))
+                _mon_abbr2 = {"jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,
+                              "jul":7,"aug":8,"sep":9,"oct":10,"nov":11,"dec":12}
+                from zoneinfo import ZoneInfo as _ZI2
+                mon_n = _mon_abbr2.get(rm.group(1)[:3].lower(), 1)
+                day_n = int(rm.group(2))
+                yr_n  = int(rm.group(3))
+                hr_n  = int(rm.group(4))
+                min_n = int(rm.group(5))
+                ampm  = rm.group(6).upper()
+                if ampm == "PM" and hr_n != 12:
+                    hr_n += 12
+                elif ampm == "AM" and hr_n == 12:
+                    hr_n = 0
+                commence = datetime(yr_n, mon_n, day_n, hr_n, min_n,
+                                    tzinfo=_ZI2("America/New_York"))
             except Exception:
                 pass
-        print(f"[kalshi_mlb] Event {event_ticker}: close_time={ct}, "
-              f"home={home_name}, away={away_name}, "
-              f"commence={commence}")
+
+        # Fallback: close_time
+        if not commence:
+            ct = away_mkt.get("close_time") or home_mkt.get("close_time")
+            if ct:
+                try:
+                    commence = datetime.fromisoformat(ct.replace("Z", "+00:00"))
+                except Exception:
+                    pass
+
+        print(f"[kalshi_mlb] Event {event_ticker}: {away_name} @ {home_name}, commence={commence}")
 
         events.append({
             "event_ticker": event_ticker,
@@ -285,11 +334,13 @@ def match_to_odds(kalshi_events: list[dict], odds_games: list[dict]) -> list[dic
 
         for ev in kalshi_events:
             # Date must match (prevents cross-day false matches)
-            # Use ticker date (market creation = game date in ET)
-            ev_date = _parse_ticker_date(ev.get("event_ticker", ""))
+            # Prefer commence from rules_primary (actual game date), fallback to ticker date
+            ev_commence = ev.get("commence")
+            if ev_commence and hasattr(ev_commence, 'astimezone'):
+                ev_date = ev_commence.astimezone(ET).strftime("%Y-%m-%d")
+            else:
+                ev_date = _parse_ticker_date(ev.get("event_ticker", ""))
             if ev_date and game_date_et and ev_date != game_date_et:
-                print(f"[match_to_odds] Date mismatch: {game['home']} vs {game['away']} "
-                      f"game={game_date_et} ticker={ev_date} ({ev.get('event_ticker','')})")
                 continue  # different day — skip
 
             # Score based on home+away team name similarity

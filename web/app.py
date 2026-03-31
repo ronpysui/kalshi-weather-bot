@@ -723,47 +723,41 @@ def api_baseball():
                 commence = game_info.get("commence")
                 mins = game_info.get("mins_to_game")
 
-            # 2. Fetch Kalshi market data for game date
+            # 2. Fetch Kalshi market data — rules_primary has exact game date+time
             if not commence:
                 try:
                     from kalshi.api import get_market as _get_mkt
                     import re as _re
                     mkt_data = _get_mkt(ticker)
-                    print(f"[positions] Market {ticker} fields: close_time={mkt_data.get('close_time')}, "
-                          f"expiration_time={mkt_data.get('expiration_time')}, "
-                          f"expected_expiration_time={mkt_data.get('expected_expiration_time')}, "
-                          f"subtitle={mkt_data.get('subtitle')}, title={mkt_data.get('title')}")
 
-                    # Best source: close_time (when trading stops ≈ game start)
-                    # Then try subtitle/title for date like "Apr 1, 2026"
-                    # Then expiration_time/expected_expiration_time (market settlement, days after game)
-                    ct = mkt_data.get("close_time")
-                    if ct:
-                        game_dt = datetime.fromisoformat(ct.replace("Z", "+00:00"))
+                    # Best source: rules_primary contains e.g.
+                    # "...originally scheduled for Apr 2, 2026 at 9:40 PM EDT"
+                    _mon_abbr = {"jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,
+                                 "jul":7,"aug":8,"sep":9,"oct":10,"nov":11,"dec":12}
+                    rules = mkt_data.get("rules_primary", "")
+                    m = _re.search(
+                        r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),\s*(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*(EDT|EST|ET|CDT|CST)',
+                        rules, _re.IGNORECASE
+                    )
+                    if m:
+                        mon_n = _mon_abbr.get(m.group(1)[:3].lower(), 1)
+                        day_n = int(m.group(2))
+                        yr_n  = int(m.group(3))
+                        hr_n  = int(m.group(4))
+                        min_n = int(m.group(5))
+                        ampm  = m.group(6).upper()
+                        if ampm == "PM" and hr_n != 12:
+                            hr_n += 12
+                        elif ampm == "AM" and hr_n == 12:
+                            hr_n = 0
+                        from zoneinfo import ZoneInfo as _ZI
+                        game_dt = datetime(yr_n, mon_n, day_n, hr_n, min_n, tzinfo=_ZI("America/New_York"))
                         commence = game_dt.isoformat()
                         import time as _time
                         mins = int((game_dt.timestamp() - _time.time()) / 60)
-
-                    # Try parsing date from subtitle like "Apr 1, 2026" or title
-                    if not commence:
-                        _mon_abbr = {"jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,
-                                     "jul":7,"aug":8,"sep":9,"oct":10,"nov":11,"dec":12}
-                        for txt_field in ["subtitle", "title"]:
-                            txt = mkt_data.get(txt_field, "")
-                            m = _re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+(\d{1,2}),?\s*(\d{4})', txt)
-                            if m:
-                                try:
-                                    mon_n = _mon_abbr.get(m.group(1)[:3].lower(), 1)
-                                    day_n = int(m.group(2))
-                                    yr_n  = int(m.group(3))
-                                    from zoneinfo import ZoneInfo as _ZI
-                                    game_dt = datetime(yr_n, mon_n, day_n, 13, 0, tzinfo=_ZI("America/New_York"))
-                                    commence = game_dt.isoformat()
-                                    import time as _time
-                                    mins = int((game_dt.timestamp() - _time.time()) / 60)
-                                    break
-                                except Exception:
-                                    pass
+                        print(f"[positions] {ticker} → rules_primary date: {commence}")
+                    else:
+                        print(f"[positions] {ticker} no date in rules: {rules[:80]}")
                 except Exception as emkt:
                     print(f"[positions] Could not fetch market {ticker}: {emkt}")
 
