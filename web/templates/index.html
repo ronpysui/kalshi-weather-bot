@@ -1538,12 +1538,28 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores, por
     </div>`;
 
   // ── P&L Calendar ──────────────────────────────────────────────────────────
-  // Group resolved bets by date, show daily P&L in a calendar grid
+  // Group resolved bets by GAME DATE (from ticker), not resolved_at
+  function _parseGameDateFromTicker(ticker) {
+    try {
+      const mid = ticker.split('-')[1]; // "26MAR312140NYYSEA"
+      const yr = 2000 + parseInt(mid.slice(0, 2));
+      const monStr = mid.slice(2, 5);
+      const monMap = {JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+      const mon = monMap[monStr];
+      if (!mon) return null;
+      const day = parseInt(mid.slice(5, 7));
+      return `${yr}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    } catch(e) { return null; }
+  }
+  const todayStr = new Date().toLocaleDateString('en-CA', {timeZone:'America/Chicago'});
   const resolvedForCal = bets.filter(b => b.status === 'won' || b.status === 'lost');
   const dailyPnl = {};
   for (const b of resolvedForCal) {
-    const d = (b.resolved_at || b.date_placed || b.timestamp || '').slice(0, 10);
+    // Use game date from ticker (most accurate), fall back to game_date field, then resolved_at
+    const d = _parseGameDateFromTicker(b.ticker || '') || b.game_date || (b.resolved_at || '').slice(0, 10);
     if (!d) continue;
+    // Skip future game dates (shouldn't be resolved yet)
+    if (d > todayStr) continue;
     if (!dailyPnl[d]) dailyPnl[d] = { pnl: 0, bets: 0, wins: 0 };
     dailyPnl[d].pnl += (b.pnl || 0);
     dailyPnl[d].bets++;
