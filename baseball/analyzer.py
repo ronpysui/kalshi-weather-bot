@@ -90,6 +90,12 @@ def analyze_game(game: dict) -> list[BaseballSignal]:
     if mins_left > MAX_BET_HOURS_BEFORE * 60:
         return []
 
+    # TODAY-ONLY: only bet on games whose date (ET) matches today's date (ET)
+    game_date_et = commence.astimezone(ET).date()
+    today_et = datetime.now(ET).date()
+    if game_date_et != today_et:
+        return []  # skip games not scheduled for today
+
     kalshi = game.get("kalshi", {})
     if not kalshi:
         return []
