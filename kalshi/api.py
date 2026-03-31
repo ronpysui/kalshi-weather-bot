@@ -105,36 +105,23 @@ def get_account_balance() -> float | None:
 
 def get_portfolio_value() -> dict | None:
     """
-    Return full portfolio breakdown: cash balance + position cost = portfolio.
-    Kalshi balance API doesn't include portfolio_value, so we compute it
-    from cash + sum of open position exposure.
+    Return full portfolio breakdown using Kalshi's portfolio_value (includes
+    current market value of positions, not just cost basis).
     """
     try:
         data = _get("/portfolio/balance", auth=True)
         print(f"[kalshi] Raw balance response: {data}")
-        # balance = total cash including locked in resting orders
-        # available_balance = free cash (not locked)
-        total_cash = data.get("balance", data.get("available_balance", 0))
-        available_cash = data.get("available_balance", total_cash)
+        # balance = total cash (cents) including locked in resting orders
+        # portfolio_value = cash + current market value of all positions (cents)
+        available_cash = data.get("available_balance", 0)
+        total_cash = data.get("balance", available_cash)
+        # Kalshi provides portfolio_value directly — use it if available
+        portfolio_cents = data.get("portfolio_value", total_cash)
 
-        # Get position values from positions API
-        positions_value = 0
-        try:
-            pos_data = _get("/portfolio/positions", params={"limit": 1000}, auth=True)
-            for p in pos_data.get("market_positions", []):
-                qty = float(p.get("position_fp", 0) or 0)
-                exposure = abs(float(p.get("market_exposure_dollars", 0) or 0))
-                if qty > 0:
-                    positions_value += exposure
-        except Exception:
-            pass
-
-        portfolio = round((total_cash / 100) + positions_value, 2)
         return {
             "cash": round(available_cash / 100, 2),
-            "portfolio": portfolio,
+            "portfolio": round(portfolio_cents / 100, 2),
             "total_cash": round(total_cash / 100, 2),
-            "positions_value": round(positions_value, 2),
         }
     except Exception as e:
         print(f"[kalshi] Portfolio value error: {e}")
