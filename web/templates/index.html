@@ -1183,10 +1183,14 @@ async function loadBaseball(manual = false) {
       const scanEndET   = data.scan_end_et || 24;
       const botMins = Math.round(botInterval / 60);
 
-      // Check if we're in the betting window (ET timezone)
+      // Check if we're in the betting window (ET timezone for logic, CST for display)
       const nowET = new Date().toLocaleString('en-US', {timeZone: 'America/New_York'});
       const hourET = new Date(nowET).getHours();
       const inWindow = hourET >= scanStartET && (scanEndET >= 24 || hourET < scanEndET);
+      // CST = ET - 1 hour for display
+      const cstStart = scanStartET - 1;
+      const cstEnd = scanEndET - 1;
+      const fmtCST = h => { const hh = ((h % 24) + 24) % 24; return hh === 0 ? '12AM' : hh > 12 ? (hh-12)+'PM' : hh === 12 ? '12PM' : hh+'AM'; };
 
       // Store for live tick
       window._bbBotInterval = botInterval;
@@ -1207,7 +1211,7 @@ async function loadBaseball(manual = false) {
                      border:1px solid rgba(255,200,0,0.15);border-radius:4px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
             <span style="font-size:10px;color:var(--yellow)">😴 Betting paused · outside scan window</span>
-            <span style="font-size:9px;color:var(--text-dim)">${scanStartET > 12 ? (scanStartET-12)+'PM' : scanStartET+'AM'} – ${scanEndET >= 24 ? '12AM' : scanEndET > 12 ? (scanEndET-12)+'PM' : scanEndET+'AM'} ET</span>
+            <span style="font-size:9px;color:var(--text-dim)">${fmtCST(cstStart)}–${fmtCST(cstEnd)} CST</span>
           </div>
           <div style="font-size:10px;color:var(--text-dim)">
             Resuming in <span style="color:var(--yellow);font-weight:600">${rH}h ${rM}m</span>
@@ -1629,7 +1633,13 @@ function renderBaseballBets(betsData, liveBalance, livePositions, mlbScores, por
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">
         ${sortedPositions.map((p, pi) => {
-            const sc = _scoreKey(mlbScores, p.away, p.home);
+            // Only match scores if the position's game is TODAY (avoid cross-day matches)
+            const posCstDate = p.commence
+              ? new Date(p.commence).toLocaleDateString('en-CA', {timeZone:'America/Chicago'})
+              : null;
+            const todayCst = new Date().toLocaleDateString('en-CA', {timeZone:'America/Chicago'});
+            const isGameToday = !posCstDate || posCstDate === todayCst;
+            const sc = isGameToday ? _scoreKey(mlbScores, p.away, p.home) : null;
             const gameStarted = sc && (sc.inProgress || sc.done);
             const scoreStr = sc && sc.awayScore !== null
               ? `${sc.awayScore} – ${sc.homeScore}` : '';
