@@ -890,6 +890,43 @@ def api_baseball_bets():
     return jsonify({"bets": list(reversed(bets)), "summary": summary})
 
 
+@app.route("/api/baseball/bets/raw")
+def api_baseball_bets_raw():
+    """Raw bet log — for debugging. Shows all entries as-is."""
+    from baseball.bet_log import _load
+    return jsonify(_load())
+
+
+@app.route("/api/baseball/bets/cleanup", methods=["POST"])
+def api_baseball_bets_cleanup():
+    """Remove duplicate and ghost bets. Keeps one entry per ticker."""
+    from baseball.bet_log import _load, _save
+    from kalshi.api import get_open_positions
+    bets = _load()
+    positions = get_open_positions()
+    open_tickers = set(positions.keys()) if positions else set()
+
+    seen_tickers = set()
+    cleaned = []
+    removed = []
+    for b in bets:
+        t = b.get("ticker", "")
+        # Skip duplicates (keep first entry per ticker)
+        if t and t in seen_tickers:
+            removed.append({"ticker": t, "reason": "duplicate", "team": b.get("team")})
+            continue
+        # Skip ghost pending bets with no Kalshi position
+        if b.get("status") == "pending" and t and t not in open_tickers:
+            removed.append({"ticker": t, "reason": "no_position", "team": b.get("team")})
+            continue
+        if t:
+            seen_tickers.add(t)
+        cleaned.append(b)
+
+    _save(cleaned)
+    return jsonify({"kept": len(cleaned), "removed": len(removed), "removed_details": removed})
+
+
 @app.route("/api/tradelog")
 def api_tradelog():
     import csv
