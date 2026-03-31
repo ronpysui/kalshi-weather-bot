@@ -622,19 +622,7 @@ def api_baseball():
                         away_name, home_name, side_key = _parse_ticker_matchup(ticker)
                         team_name = _parse_ticker_team(ticker)
                         game_id = ""
-                        # Fetch real game date from Kalshi market data
                         game_date = ""
-                        try:
-                            from kalshi.api import get_market as _gm
-                            md = _gm(ticker)
-                            ct = md.get("close_time") or md.get("expiration_time")
-                            if ct:
-                                from zoneinfo import ZoneInfo as _ZI
-                                _edt = _ZI("America/New_York")
-                                gdt = datetime.fromisoformat(ct.replace("Z", "+00:00"))
-                                game_date = gdt.astimezone(_edt).strftime("%Y-%m-%d")
-                        except Exception:
-                            pass
                     _auto_log(
                         home=home_name, away=away_name, team=team_name,
                         side=side_key, ticker=ticker,
@@ -679,21 +667,6 @@ def api_baseball():
                         b["teams"] = f"{parsed_away} @ {parsed_home}"
                         dirty = True
                         print(f"[sync] Fixed team names for {t}: {parsed_away} @ {parsed_home} → {parsed_team}")
-                    # Also fix game_date from Kalshi market data if missing/wrong
-                    if not b.get("game_date") or len(b.get("game_date", "")) < 8:
-                        try:
-                            from kalshi.api import get_market as _gm3
-                            md3 = _gm3(t)
-                            ct3 = md3.get("close_time") or md3.get("expiration_time")
-                            if ct3:
-                                from zoneinfo import ZoneInfo as _ZI3
-                                gdt3 = datetime.fromisoformat(ct3.replace("Z", "+00:00"))
-                                new_gd = gdt3.astimezone(_ZI3("America/New_York")).strftime("%Y-%m-%d")
-                                if b.get("game_date") != new_gd:
-                                    b["game_date"] = new_gd
-                                    dirty = True
-                        except Exception:
-                            pass
             except Exception as e3:
                 print(f"[sync] Step 3 fix names error: {e3}")
 
@@ -739,34 +712,37 @@ def api_baseball():
             away, home, side = _parse_ticker_matchup(ticker)
             team = _parse_ticker_team(ticker)
 
-            # Get commence time: prefer Kalshi market close_time (actual game date),
-            # then matching game card, then ticker parsing as last resort
+            # Get commence time: prefer Odds API game card, then ticker parsing (EDT)
             commence = None
             mins = None
 
-            # 1. Fetch real market data from Kalshi for accurate date
-            try:
-                from kalshi.api import get_market as _get_mkt
-                mkt_data = _get_mkt(ticker)
-                ct = mkt_data.get("close_time") or mkt_data.get("expiration_time")
-                if ct:
-                    from datetime import datetime as _dt
-                    game_dt = _dt.fromisoformat(ct.replace("Z", "+00:00"))
-                    commence = game_dt.isoformat()
-                    import time as _time
-                    mins = int((game_dt.timestamp() - _time.time()) / 60)
-            except Exception as emkt:
-                print(f"[positions] Could not fetch market {ticker}: {emkt}")
+            # 1. Matching game card from Odds API
+            game_info = next((go for go in games_out
+                              if go.get("home_ticker") == ticker or go.get("away_ticker") == ticker), None)
+            if game_info:
+                commence = game_info.get("commence")
+                mins = game_info.get("mins_to_game")
 
-            # 2. Fallback: matching game card from Odds API
+            # 2. Fetch Kalshi market subtitle/title for game date hint
             if not commence:
-                game_info = next((go for go in games_out
-                                  if go.get("home_ticker") == ticker or go.get("away_ticker") == ticker), None)
-                if game_info:
-                    commence = game_info.get("commence")
-                    mins = game_info.get("mins_to_game")
+                try:
+                    from kalshi.api import get_market as _get_mkt
+                    mkt_data = _get_mkt(ticker)
+                    # Kalshi subtitle often contains the game date, e.g. "Apr 1, 2026"
+                    # open_time is when market opened; expected_expiration_time is closer to game
+                    # Use expected_expiration_time as best proxy for game time
+                    for field in ["expected_expiration_time", "open_time"]:
+                        ct = mkt_data.get(field)
+                        if ct:
+                            game_dt = datetime.fromisoformat(ct.replace("Z", "+00:00"))
+                            commence = game_dt.isoformat()
+                            import time as _time
+                            mins = int((game_dt.timestamp() - _time.time()) / 60)
+                            break
+                except Exception as emkt:
+                    print(f"[positions] Could not fetch market {ticker}: {emkt}")
 
-            # 3. Last resort: parse from ticker (EDT time)
+            # 3. Last resort: parse from ticker (time is EDT)
             if not commence:
                 try:
                     mid = ticker.split("-")[1]
@@ -779,8 +755,7 @@ def api_baseball():
                     hhmm = mid[7:11]
                     hr, mn = int(hhmm[:2]), int(hhmm[2:])
                     from zoneinfo import ZoneInfo as _ZI
-                    from datetime import datetime as _dt2
-                    game_dt = _dt2(yr, mon, day, hr, mn, tzinfo=_ZI("America/New_York"))
+                    game_dt = datetime(yr, mon, day, hr, mn, tzinfo=_ZI("America/New_York"))
                     commence = game_dt.isoformat()
                     import time as _time
                     mins = int((game_dt.timestamp() - _time.time()) / 60)
@@ -941,6 +916,32 @@ def api_baseball_bets_raw():
     """Raw bet log — for debugging. Shows all entries as-is."""
     from baseball.bet_log import _load
     return jsonify(_load())
+
+
+@app.route("/api/debug/positions")
+def api_debug_positions():
+    """Debug: show raw tickers and market data for each open position."""
+    from kalshi.api import get_open_positions, get_market
+    positions = get_open_positions()
+    result = []
+    for ticker, pos in positions.items():
+        entry = {"ticker": ticker, "position": pos}
+        try:
+            mkt = get_market(ticker)
+            entry["market"] = {
+                "title": mkt.get("title"),
+                "subtitle": mkt.get("subtitle"),
+                "close_time": mkt.get("close_time"),
+                "expiration_time": mkt.get("expiration_time"),
+                "open_time": mkt.get("open_time"),
+                "expected_expiration_time": mkt.get("expected_expiration_time"),
+                "event_ticker": mkt.get("event_ticker"),
+                "status": mkt.get("status"),
+            }
+        except Exception as e:
+            entry["market_error"] = str(e)
+        result.append(entry)
+    return jsonify(result)
 
 
 @app.route("/api/baseball/bets/cleanup", methods=["POST"])
